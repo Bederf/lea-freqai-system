@@ -168,9 +168,9 @@ class LeaFreqAIStrategy(IStrategy):
                 # Market volatility
                 btc_dataframe["%market_vol"] = btc_dataframe["close"].pct_change().rolling(48).std()
 
-                # Merge with main dataframe
+                # Merge with main dataframe (same timeframe, so don't append_timeframe)
                 dataframe = merge_informative_pair(dataframe, btc_dataframe, self.timeframe, self.timeframe,
-                                                   ffill=True, suffix="_btc")
+                                                   ffill=True, append_timeframe=False, suffix="_btc")
 
         return dataframe
 

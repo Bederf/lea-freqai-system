@@ -1,0 +1,36 @@
+[Unit]
+Description=LEA Freqtrade Trading Bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/home/pi/freqtrade
+Environment="PATH=/home/pi/freqtrade/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+EnvironmentFile=/home/pi/freqtrade/.env
+
+# Main command with FreqAI model specified
+ExecStart=/home/pi/freqtrade/.venv/bin/freqtrade trade \
+    --config /home/pi/freqtrade/user_data/config.json \
+    --strategy LeaFreqAIStrategy \
+    --freqaimodel LeaTorchLSTM \
+    --logfile /home/pi/freqtrade/freqtrade.log
+
+# Restart policy
+Restart=on-failure
+RestartSec=30
+StartLimitBurst=5
+StartLimitInterval=500
+
+# Resource limits
+MemoryLimit=2G
+CPUQuota=80%
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
