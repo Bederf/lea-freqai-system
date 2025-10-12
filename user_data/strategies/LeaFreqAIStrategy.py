@@ -157,20 +157,24 @@ class LeaFreqAIStrategy(IStrategy):
         """
         Market regime features (BTC correlation)
         """
-        # Get BTC data for regime detection
-        if self.dp:
+        # Only add BTC features if this is NOT the BTC pair itself
+        if metadata.get("pair") != "BTC/USDT" and self.dp:
             btc_dataframe = self.dp.get_pair_dataframe(pair="BTC/USDT", timeframe=self.timeframe)
-            if not btc_dataframe.empty:
+            if not btc_dataframe.empty and len(btc_dataframe) > 50:
                 # BTC trend strength
-                btc_dataframe["btc_ema_50"] = ta.EMA(btc_dataframe, timeperiod=50)
-                btc_dataframe["%btc_trend"] = (btc_dataframe["close"] - btc_dataframe["btc_ema_50"]) / btc_dataframe["btc_ema_50"]
+                btc_ema = ta.EMA(btc_dataframe["close"], timeperiod=50)
+                btc_trend = (btc_dataframe["close"] - btc_ema) / btc_ema
 
                 # Market volatility
-                btc_dataframe["%market_vol"] = btc_dataframe["close"].pct_change().rolling(48).std()
+                btc_vol = btc_dataframe["close"].pct_change().rolling(48).std()
 
-                # Merge with main dataframe (same timeframe, so don't append_timeframe)
-                dataframe = merge_informative_pair(dataframe, btc_dataframe, self.timeframe, self.timeframe,
-                                                   ffill=True, append_timeframe=False, suffix="_btc")
+                # Add to dataframe with proper alignment
+                dataframe["%btc_trend"] = btc_trend.reindex(dataframe.index, method='ffill')
+                dataframe["%market_vol"] = btc_vol.reindex(dataframe.index, method='ffill')
+        else:
+            # For BTC pair or if data unavailable, use neutral values
+            dataframe["%btc_trend"] = 0.0
+            dataframe["%market_vol"] = dataframe["close"].pct_change().rolling(48).std()
 
         return dataframe
 
@@ -195,6 +199,11 @@ class LeaFreqAIStrategy(IStrategy):
         """
         Entry signals based on LSTM predictions + filters
         """
+        # Check if predictions are available
+        if "&-prediction" not in dataframe.columns:
+            dataframe["enter_long"] = 0
+            return dataframe
+
         conditions = []
 
         # Main signal: LSTM predicts positive return
@@ -207,8 +216,8 @@ class LeaFreqAIStrategy(IStrategy):
         conditions.append(dataframe["volume"] > 0)
 
         # Filter 3: BTC not crashing (if available)
-        if "%btc_trend_btc" in dataframe.columns:
-            conditions.append(dataframe["%btc_trend_btc"] > -0.10)
+        if "%btc_trend" in dataframe.columns:
+            conditions.append(dataframe["%btc_trend"] > -0.10)
 
         # Filter 4: Price above EMA 200 (trend filter)
         conditions.append(dataframe["close"] > dataframe["ema_200"])
@@ -226,6 +235,11 @@ class LeaFreqAIStrategy(IStrategy):
         """
         Exit signals based on LSTM predictions
         """
+        # Check if predictions are available
+        if "&-prediction" not in dataframe.columns:
+            dataframe["exit_long"] = 0
+            return dataframe
+
         conditions = []
 
         # Main signal: LSTM predicts negative return
@@ -251,6 +265,10 @@ class LeaFreqAIStrategy(IStrategy):
         dataframe, _ = self.dp.get_analyzed_dataframe(pair, self.timeframe)
         last_candle = dataframe.iloc[-1]
 
+        # Check if predictions are available
+        if "&-prediction" not in dataframe.columns:
+            return False
+
         # Require strong prediction confidence
         if last_candle["&-prediction"] < 0.005:  # Less than 0.5% predicted return
             return False
@@ -269,6 +287,10 @@ class LeaFreqAIStrategy(IStrategy):
         """
         dataframe, _ = self.dp.get_analyzed_dataframe(pair, self.timeframe)
         last_candle = dataframe.iloc[-1]
+
+        # Check if predictions are available
+        if "&-prediction" not in dataframe.columns:
+            return proposed_stake
 
         # Get prediction confidence
         prediction = last_candle["&-prediction"]

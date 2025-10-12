@@ -1,5 +1,5 @@
 """
-LEA LSTM Model for FreqAI
+LEA LSTM Model for FreqAI - Simplified
 Based on: Deep Learning in Quantitative Trading (Zhang & Zohren, 2025)
 """
 from typing import Any
@@ -15,86 +15,74 @@ from freqtrade.freqai.torch.PyTorchDataConvertor import (
 from freqtrade.freqai.torch.PyTorchModelTrainer import PyTorchModelTrainer
 
 
-class LSTMWithAttention(nn.Module):
+class SimpleLSTMModel(nn.Module):
     """
-    LSTM model with optional attention mechanism
+    Simple LSTM model that handles 2D input from FreqAI
     """
     def __init__(
         self,
         input_dim: int,
+        output_dim: int = 1,
         hidden_dim: int = 128,
         num_layers: int = 2,
-        dropout: float = 0.25,
-        sequence_len: int = 48,
-        use_attention: bool = True,
+        dropout: float = 0.2,
     ):
         super().__init__()
         self.hidden_dim = hidden_dim
         self.num_layers = num_layers
-        self.use_attention = use_attention
 
-        # LSTM layers
+        # Single LSTM layer
         self.lstm = nn.LSTM(
             input_size=input_dim,
             hidden_size=hidden_dim,
             num_layers=num_layers,
             dropout=dropout if num_layers > 1 else 0,
             batch_first=True,
-            bidirectional=False
         )
 
-        # Attention mechanism
-        if use_attention:
-            self.attention = nn.Sequential(
-                nn.Linear(hidden_dim, hidden_dim),
-                nn.Tanh(),
-                nn.Linear(hidden_dim, 1)
-            )
-
-        # Output layer
+        # Simple output layer
         self.fc = nn.Sequential(
             nn.Linear(hidden_dim, hidden_dim // 2),
             nn.ReLU(),
             nn.Dropout(dropout),
-            nn.Linear(hidden_dim // 2, 1)
+            nn.Linear(hidden_dim // 2, output_dim)
         )
 
-    def forward(self, x):
-        # x shape: (batch_size, sequence_len, input_dim)
-        lstm_out, _ = self.lstm(x)  # (batch_size, sequence_len, hidden_dim)
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass - handles 2D input (batch, features)
+        """
+        # x shape: (batch_size, features)
+        # Reshape to (batch_size, 1, features) for LSTM
+        if len(x.shape) == 2:
+            x = x.unsqueeze(1)  # Add sequence dimension
 
-        if self.use_attention:
-            # Attention weights
-            attention_weights = self.attention(lstm_out)  # (batch_size, sequence_len, 1)
-            attention_weights = torch.softmax(attention_weights, dim=1)
+        # LSTM forward
+        lstm_out, _ = self.lstm(x)  # (batch_size, 1, hidden_dim)
 
-            # Weighted sum
-            context = torch.sum(attention_weights * lstm_out, dim=1)  # (batch_size, hidden_dim)
-        else:
-            # Use last output
-            context = lstm_out[:, -1, :]  # (batch_size, hidden_dim)
+        # Take the last output
+        last_output = lstm_out[:, -1, :]  # (batch_size, hidden_dim)
 
         # Final prediction
-        output = self.fc(context)  # (batch_size, 1)
+        output = self.fc(last_output)  # (batch_size, output_dim)
+
         return output
 
 
 class LeaTorchLSTM(BasePyTorchRegressor):
     """
-    LEA LSTM FreqAI Model
+    LEA LSTM FreqAI Model - Simplified version
 
-    Implements LSTM-based price prediction with attention mechanism.
+    Implements LSTM-based price prediction.
 
     Config example:
     {
         "freqai": {
             "model_training_parameters": {
-                "sequence": 48,
                 "hidden": 128,
                 "layers": 2,
-                "dropout": 0.25,
-                "use_attention": true,
-                "epochs": 15,
+                "dropout": 0.2,
+                "epochs": 10,
                 "batch_size": 64,
                 "lr": 0.001,
                 "weight_decay": 0.0001
@@ -112,16 +100,14 @@ class LeaTorchLSTM(BasePyTorchRegressor):
         config = self.freqai_info.get("model_training_parameters", {})
 
         # Model hyperparameters
-        self.sequence_len: int = config.get("sequence", 48)
         self.hidden_dim: int = config.get("hidden", 128)
         self.num_layers: int = config.get("layers", 2)
-        self.dropout: float = config.get("dropout", 0.25)
-        self.use_attention: bool = config.get("use_attention", True)
+        self.dropout: float = config.get("dropout", 0.2)
 
         # Training hyperparameters
         self.learning_rate: float = config.get("lr", 0.001)
         self.weight_decay: float = config.get("weight_decay", 0.0001)
-        self.n_epochs: int = config.get("epochs", 15)
+        self.n_epochs: int = config.get("epochs", 10)
         self.batch_size: int = config.get("batch_size", 64)
 
     def fit(self, data_dictionary: dict, dk: FreqaiDataKitchen, **kwargs) -> Any:
@@ -131,13 +117,12 @@ class LeaTorchLSTM(BasePyTorchRegressor):
         n_features = data_dictionary["train_features"].shape[-1]
 
         # Create model
-        model = LSTMWithAttention(
+        model = SimpleLSTMModel(
             input_dim=n_features,
+            output_dim=1,
             hidden_dim=self.hidden_dim,
             num_layers=self.num_layers,
-            dropout=self.dropout,
-            sequence_len=self.sequence_len,
-            use_attention=self.use_attention
+            dropout=self.dropout
         )
         model.to(self.device)
 
