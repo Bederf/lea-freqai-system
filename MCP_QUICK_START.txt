@@ -1,0 +1,136 @@
+═══════════════════════════════════════════════════════════════════════════════
+  CLAUDE DESKTOP MCP - FREQTRADE INTEGRATION QUICK START
+═══════════════════════════════════════════════════════════════════════════════
+
+🎯 GOAL: Connect Claude Desktop to your FreqTrade bot
+
+═══════════════════════════════════════════════════════════════════════════════
+  METHOD 1: AUTOMATIC (RECOMMENDED)
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Copy file to Windows:
+   - Transfer 'windows_mcp_installer.ps1' to your Windows PC
+
+2. Run PowerShell as User (not admin needed):
+   - Right-click Windows Start → Windows PowerShell
+
+3. Navigate to file location:
+   cd Downloads
+
+4. Run installer:
+   .\windows_mcp_installer.ps1
+
+5. Follow prompts (choose option 3 for both local + VPN)
+
+6. Restart Claude Desktop
+
+═══════════════════════════════════════════════════════════════════════════════
+  METHOD 2: MANUAL (COPY & PASTE)
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Open File Explorer, paste this in address bar:
+   %APPDATA%\Claude
+
+2. Create/Edit file: claude_desktop_config.json
+
+3. Paste this JSON (ENTIRE CONTENT, replace everything):
+
+{
+  "mcpServers": {
+    "freqtrade-local": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/create-server", "freqtrade-api"],
+      "env": {
+        "FREQTRADE_API_URL": "http://192.168.50.10:8080",
+        "FREQTRADE_API_USERNAME": "admin",
+        "FREQTRADE_API_PASSWORD": "f9l4fHChq8ky6HYY6ZKibw=="
+      }
+    },
+    "freqtrade-vpn": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/create-server", "freqtrade-api"],
+      "env": {
+        "FREQTRADE_API_URL": "http://10.240.89.1:8080",
+        "FREQTRADE_API_USERNAME": "admin",
+        "FREQTRADE_API_PASSWORD": "f9l4fHChq8ky6HYY6ZKibw=="
+      }
+    }
+  }
+}
+
+4. Save file (Ctrl+S)
+
+5. Close Claude Desktop completely
+
+6. Restart Claude Desktop
+
+═══════════════════════════════════════════════════════════════════════════════
+  VERIFY IT WORKS
+═══════════════════════════════════════════════════════════════════════════════
+
+In Claude Desktop, start a new conversation and type:
+
+"Check FreqTrade bot status"
+
+You should get real data about your bot!
+
+═══════════════════════════════════════════════════════════════════════════════
+  TEST COMMANDS TO TRY
+═══════════════════════════════════════════════════════════════════════════════
+
+✓ "Show FreqTrade status"
+✓ "What are my current trades?"
+✓ "Show FreqTrade profit"
+✓ "Display my wallet balance"
+✓ "Show FreqTrade performance"
+✓ "List all open trades"
+
+═══════════════════════════════════════════════════════════════════════════════
+  TROUBLESHOOTING
+═══════════════════════════════════════════════════════════════════════════════
+
+Problem: "Connection refused" or "Cannot reach API"
+Solution: Test API first in PowerShell:
+
+  Invoke-RestMethod -Uri "http://192.168.50.10:8080/api/v1/ping"
+
+  Should return: {"status":"pong"}
+
+Problem: "Node.js not found"
+Solution: Install Node.js from https://nodejs.org
+
+Problem: MCP not showing in Claude
+Solution:
+  1. Check config file exists at: %APPDATA%\Claude\claude_desktop_config.json
+  2. Restart Claude Desktop (close completely first)
+  3. Check Claude Desktop logs
+
+═══════════════════════════════════════════════════════════════════════════════
+  QUICK REFERENCE
+═══════════════════════════════════════════════════════════════════════════════
+
+Local URL:     http://192.168.50.10:8080
+VPN URL:       http://10.240.89.1:8080
+Username:      admin
+Password:      f9l4fHChq8ky6HYY6ZKibw==
+
+Config File:   %APPDATA%\Claude\claude_desktop_config.json
+
+Test API:      Invoke-RestMethod -Uri "http://192.168.50.10:8080/api/v1/ping"
+
+═══════════════════════════════════════════════════════════════════════════════
+  IMPORTANT NOTES
+═══════════════════════════════════════════════════════════════════════════════
+
+⚠️  FreqTrade bot MUST be running on Raspberry Pi
+⚠️  You must be on same network OR connected to WireGuard VPN
+⚠️  Node.js must be installed on Windows
+✅  No admin rights needed on Windows
+✅  Configuration is secure (stored locally only)
+
+═══════════════════════════════════════════════════════════════════════════════
+
+For full documentation, see: CLAUDE_MCP_SETUP.md
+For network setup, see: FREQTRADE_REMOTE_ACCESS.md
+
+Last Updated: 2025-10-12

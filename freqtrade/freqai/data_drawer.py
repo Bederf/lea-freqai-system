@@ -614,7 +614,7 @@ class FreqaiDataDrawer:
         elif self.model_type == "pytorch":
             import torch
 
-            zipfile = torch.load(dk.data_path / f"{dk.model_filename}_model.zip")
+            zipfile = torch.load(dk.data_path / f"{dk.model_filename}_model.zip", weights_only=False)
             model = zipfile["pytrainer"]
             model = model.load_from_checkpoint(zipfile)
 
