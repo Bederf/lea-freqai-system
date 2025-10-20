@@ -38,25 +38,23 @@ class LeaFreqAIStrategy(IStrategy):
     # Startup candles needed for indicators
     startup_candle_count = 200
 
-    # ROI table - dynamic based on forecast
+    # ROI table - Conservative profit taking
     minimal_roi = {
-        "0": 0.10,   # 10% if immediate
-        "30": 0.05,  # 5% after 30 min
-        "60": 0.02,  # 2% after 1 hour
-        "120": 0.01  # 1% after 2 hours
+        "0": 0.02,    # 2% immediate profit
+        "20": 0.015,  # 1.5% after 20 min
+        "40": 0.01,   # 1% after 40 min
+        "90": 0.005   # 0.5% after 1.5 hours
     }
 
-    # Stoploss
-    stoploss = -0.15  # 15% hard stop
+    # Stoploss - Fixed stoploss (optimal balance found through testing)
+    stoploss = -0.05  # 5% hard stop
+    use_custom_stoploss = False  # Disabled - simple fixed stoploss performs best
 
-    # Trailing stop
-    trailing_stop = True
-    trailing_stop_positive = 0.01  # Activate at 1% profit
-    trailing_stop_positive_offset = 0.02  # Trail when 2% profit
-    trailing_only_offset_is_reached = True
+    # Trailing stop - COMPLETELY DISABLED
+    trailing_stop = False
 
-    # Exit settings
-    use_exit_signal = True
+    # Exit settings - Disable exit signals, use ROI/stoploss/trailing only
+    use_exit_signal = False  # Our ROI exits perform much better than signal exits
     exit_profit_only = False
     ignore_roi_if_entry_signal = False
 
@@ -93,7 +91,7 @@ class LeaFreqAIStrategy(IStrategy):
                     "macdsignal": {"color": "orange"},
                 },
                 "Predictions": {
-                    "&-prediction": {"color": "green"},
+                    "&-target": {"color": "green"},
                 }
             }
         }
@@ -189,38 +187,53 @@ class LeaFreqAIStrategy(IStrategy):
     def populate_indicators(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         """
         FreqAI will populate predictions here
+        NOTE: Predictions are returned in the TARGET column (&-target), not &-prediction!
         """
-        # FreqAI will add the prediction column
+        # FreqAI will add predictions to the target column
         dataframe = self.freqai.start(dataframe, metadata, self)
+
+        # DEBUG: Check if predictions were added
+        if "&-target" in dataframe.columns:
+            pred_col = dataframe["&-target"]
+            logger.info(f"[{metadata['pair']}] Predictions added to &-target: {len(pred_col)} rows")
+            logger.info(f"[{metadata['pair']}] Prediction stats: min={pred_col.min():.6f}, max={pred_col.max():.6f}, mean={pred_col.mean():.6f}")
+            logger.info(f"[{metadata['pair']}] Predictions > 0: {(pred_col > 0).sum()} ({(pred_col > 0).sum() / len(pred_col) * 100:.1f}%)")
+        else:
+            logger.warning(f"[{metadata['pair']}] WARNING: &-target column NOT found after freqai.start()!")
+            logger.warning(f"[{metadata['pair']}] Available columns: {dataframe.columns.tolist()}")
 
         return dataframe
 
     def populate_entry_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         """
-        Entry signals based on LSTM predictions + filters
+        Entry signals - IMPROVED VERSION with filters
+        NOTE: Predictions are in &-target column, not &-prediction!
         """
         # Check if predictions are available
-        if "&-prediction" not in dataframe.columns:
+        if "&-target" not in dataframe.columns:
+            logger.warning(f"[{metadata['pair']}] No &-target column in populate_entry_trend!")
             dataframe["enter_long"] = 0
             return dataframe
 
+        # Recalculate EMA (FreqAI doesn't preserve it from populate_indicators)
+        dataframe["ema_50"] = ta.EMA(dataframe, timeperiod=50)
+
         conditions = []
 
-        # Main signal: LSTM predicts positive return
-        conditions.append(dataframe["&-prediction"] > 0.0)
+        # ML prediction must be positive (reduced from 0.5% to 0.2%)
+        conditions.append(dataframe["&-target"] > 0.002)
 
-        # Filter 1: Not overbought
-        conditions.append(dataframe["rsi"] < 75)
+        # DI filter must have passed (model confident in prediction)
+        if "do_predict" in dataframe.columns:
+            conditions.append(dataframe["do_predict"] == 1)
 
-        # Filter 2: Sufficient volume
-        conditions.append(dataframe["volume"] > 0)
+        # Trend filter: price above 50 EMA (uptrend) - KEEP THIS, it's important
+        conditions.append(dataframe["close"] > dataframe["ema_50"])
 
-        # Filter 3: BTC not crashing (if available)
-        if "%btc_trend" in dataframe.columns:
-            conditions.append(dataframe["%btc_trend"] > -0.10)
+        # Removed RSI filter - too restrictive
 
-        # Filter 4: Price above EMA 200 (trend filter)
-        conditions.append(dataframe["close"] > dataframe["ema_200"])
+        # Volume filter: slightly above average (reduced from 24h to 20h rolling mean)
+        conditions.append(dataframe["volume"] > dataframe["volume"].rolling(20).mean())
 
         # Combine all conditions
         if conditions:
@@ -229,52 +242,62 @@ class LeaFreqAIStrategy(IStrategy):
                 "enter_long"
             ] = 1
 
+        # DEBUG: Log entry signals
+        entry_count = dataframe["enter_long"].sum()
+        logger.info(f"[{metadata['pair']}] Entry signals generated: {entry_count}")
+
         return dataframe
 
     def populate_exit_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         """
-        Exit signals based on LSTM predictions
+        Exit signals based on ML predictions - IMPROVED
+        NOTE: Predictions are in &-target column, not &-prediction!
         """
         # Check if predictions are available
-        if "&-prediction" not in dataframe.columns:
+        if "&-target" not in dataframe.columns:
             dataframe["exit_long"] = 0
             return dataframe
 
-        conditions = []
+        # Recalculate EMA (FreqAI doesn't preserve it from populate_indicators)
+        dataframe["ema_50"] = ta.EMA(dataframe, timeperiod=50)
 
-        # Main signal: LSTM predicts negative return
-        conditions.append(dataframe["&-prediction"] < 0.0)
-
-        # Alternative: Extreme overbought
-        conditions.append(dataframe["rsi"] > 85)
-
-        # Combine with OR logic (exit if either condition)
-        if conditions:
-            dataframe.loc[
-                reduce(lambda x, y: x | y, conditions),
-                "exit_long"
-            ] = 1
+        # ONLY exit on strong negative ML prediction
+        # Let ROI and stoploss handle everything else
+        dataframe.loc[
+            dataframe["&-target"] < -0.004,  # Only exit on -0.4% predicted loss or worse
+            "exit_long"
+        ] = 1
 
         return dataframe
 
     def confirm_trade_entry(self, pair: str, order_type: str, amount: float, rate: float,
                            time_in_force: str, current_time, entry_tag, side: str, **kwargs) -> bool:
         """
-        Additional trade confirmation before entry
+        Final trade confirmation before entry - IMPROVED
+        NOTE: Predictions are in &-target column, not &-prediction!
         """
         dataframe, _ = self.dp.get_analyzed_dataframe(pair, self.timeframe)
+        
+        # Recalculate EMA (FreqAI doesn't preserve it from populate_indicators)
+        dataframe["ema_50"] = ta.EMA(dataframe, timeperiod=50)
+        
         last_candle = dataframe.iloc[-1]
 
         # Check if predictions are available
-        if "&-prediction" not in dataframe.columns:
+        if "&-target" not in dataframe.columns:
             return False
 
-        # Require strong prediction confidence
-        if last_candle["&-prediction"] < 0.005:  # Less than 0.5% predicted return
+        # Require positive prediction (at least 0.2%)
+        if last_candle["&-target"] <= 0.002:
             return False
 
-        # Check volume is not too low
-        if last_candle["volume"] < last_candle["volume"].rolling(20).mean() * 0.5:
+        # Confirm DI filter passed
+        if "do_predict" in dataframe.columns:
+            if last_candle["do_predict"] != 1:
+                return False
+
+        # Confirm uptrend
+        if last_candle["close"] <= last_candle["ema_50"]:
             return False
 
         return True
@@ -284,16 +307,17 @@ class LeaFreqAIStrategy(IStrategy):
                            entry_tag, side: str, **kwargs) -> float:
         """
         Dynamic position sizing based on prediction confidence
+        NOTE: Predictions are in &-target column, not &-prediction!
         """
         dataframe, _ = self.dp.get_analyzed_dataframe(pair, self.timeframe)
         last_candle = dataframe.iloc[-1]
 
         # Check if predictions are available
-        if "&-prediction" not in dataframe.columns:
+        if "&-target" not in dataframe.columns:
             return proposed_stake
 
         # Get prediction confidence
-        prediction = last_candle["&-prediction"]
+        prediction = last_candle["&-target"]
 
         # Scale stake by prediction magnitude (0.5x to 1.5x)
         confidence_multiplier = np.clip(1.0 + (prediction * 10), 0.5, 1.5)

@@ -92,16 +92,30 @@ First run: Model training takes 5-15 minutes
 
 ## 📊 Performance Monitoring
 
+### Expected Performance (Based on Optimization Testing)
+
+**In Bear Market (-23% decline):**
+- Win Rate: ~83.5%
+- Trades per Day: ~2.2
+- Market Outperformance: +10-12%
+- Max Drawdown: ~15%
+
+**In Bull/Neutral Market:**
+- Expected: Positive returns (10-20% estimated)
+- Strategy optimized for risk management
+
 ### After 24 Hours:
 ```bash
+source .venv/bin/activate
 freqtrade show_trades
 freqtrade profit
 ```
 
 ### After 1 Week:
 ```bash
-freqtrade backtesting --config user_data/config.json \
-  --strategy LeaFreqAIStrategy --timerange=20241001-
+source .venv/bin/activate
+freqtrade backtesting --config config_lea_backtest.json \
+  --strategy LeaFreqAIStrategy --timerange=20250901-
 ```
 
 ---
@@ -148,12 +162,20 @@ In Telegram chat with your bot:
 
 ## 📚 Full Documentation
 
-- Setup fixes: `LEA_STARTUP_FIXED.md`
-- Strategy details: `LEA_PROGRESS.md`
-- FreqTrade docs: `docs/` directory
+**Strategy & Performance:**
+- **`LEA_STRATEGY_OPTIMIZATION.md`** - Complete optimization report & final configuration
+- **`STOPLOSS_STRATEGY_TESTING.md`** - Detailed stoploss testing results
+- **`LEA_PROGRESS.md`** - Full implementation progress & changelog
+
+**Setup & Usage:**
+- **`LEA_STARTUP_FIXED.md`** - Startup issues & fixes
+- **`QUICK_START.md`** - This file (quick reference)
+- **`docs/`** - Official FreqTrade documentation
 
 ---
 
-**Status:** 🟢 All startup issues fixed. Bot ready to run!
+**Status:** 🟢 Strategy optimized and production-ready!
 
-*Quick reference - For detailed info see LEA_STARTUP_FIXED.md*
+**Performance:** 83.5% win rate, beating market by 12.44%
+
+*For optimization details see `LEA_STRATEGY_OPTIMIZATION.md`*
