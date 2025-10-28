@@ -38,20 +38,22 @@ class LeaFreqAIStrategy(IStrategy):
     # Startup candles needed for indicators
     startup_candle_count = 200
 
-    # ROI table - Conservative profit taking
+    # ROI table - More achievable profit targets
     minimal_roi = {
-        "0": 0.02,    # 2% immediate profit
-        "20": 0.015,  # 1.5% after 20 min
-        "40": 0.01,   # 1% after 40 min
-        "90": 0.005   # 0.5% after 1.5 hours
+        "0": 0.015,   # 1.5% immediate profit (was 2%)
+        "30": 0.01,   # 1% after 30 min (was 1.5% at 20 min)
+        "60": 0.008,  # 0.8% after 1 hour (was 1% at 40 min)
+        "120": 0.005  # 0.5% after 2 hours (was 1.5 hours)
     }
 
     # Stoploss - Fixed stoploss (optimal balance found through testing)
     stoploss = -0.05  # 5% hard stop
     use_custom_stoploss = False  # Disabled - simple fixed stoploss performs best
 
-    # Trailing stop - COMPLETELY DISABLED
-    trailing_stop = False
+    # Trailing stop - Enabled to protect profits
+    trailing_stop = True
+    trailing_stop_positive = 0.005  # Activate trailing at +0.5% profit
+    trailing_stop_positive_offset = 0.01  # Trail 1% below peak (locks in profit above +1%)
 
     # Exit settings - Disable exit signals, use ROI/stoploss/trailing only
     use_exit_signal = False  # Our ROI exits perform much better than signal exits
@@ -220,8 +222,8 @@ class LeaFreqAIStrategy(IStrategy):
 
         conditions = []
 
-        # ML prediction must be positive (reduced from 0.5% to 0.2%)
-        conditions.append(dataframe["&-target"] > 0.002)
+        # ML prediction must be positive (increased to 0.5% for better selectivity)
+        conditions.append(dataframe["&-target"] > 0.005)
 
         # DI filter must have passed (model confident in prediction)
         if "do_predict" in dataframe.columns:
@@ -230,7 +232,8 @@ class LeaFreqAIStrategy(IStrategy):
         # Trend filter: price above 50 EMA (uptrend) - KEEP THIS, it's important
         conditions.append(dataframe["close"] > dataframe["ema_50"])
 
-        # Removed RSI filter - too restrictive
+        # RSI filter: avoid overbought conditions (re-enabled to prevent buying at tops)
+        conditions.append(dataframe["rsi"] < 70)
 
         # Volume filter: slightly above average (reduced from 24h to 20h rolling mean)
         conditions.append(dataframe["volume"] > dataframe["volume"].rolling(20).mean())
@@ -287,8 +290,8 @@ class LeaFreqAIStrategy(IStrategy):
         if "&-target" not in dataframe.columns:
             return False
 
-        # Require positive prediction (at least 0.2%)
-        if last_candle["&-target"] <= 0.002:
+        # Require positive prediction (at least 0.5%)
+        if last_candle["&-target"] <= 0.005:
             return False
 
         # Confirm DI filter passed
