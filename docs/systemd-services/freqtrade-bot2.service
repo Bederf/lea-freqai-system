@@ -1,0 +1,18 @@
+[Unit]
+Description=FreqTrade Bot 2 (FinAgent Strategy)
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/lea-freqai-system
+EnvironmentFile=/home/pi/lea-freqai-system/.env
+ExecStart=/home/pi/lea-freqai-system/.venv/bin/freqtrade trade --config /home/pi/lea-freqai-system/user_data/config_finagent.json --strategy LeaFinAgentStrategy --freqaimodel PyTorchMLPRegressor --logfile /home/pi/lea-freqai-system/freqtrade_finagent.log
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=freqtrade-bot2
+
+[Install]
+WantedBy=multi-user.target
