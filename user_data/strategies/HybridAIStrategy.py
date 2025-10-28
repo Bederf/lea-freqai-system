@@ -33,25 +33,22 @@ class HybridAIStrategy(IStrategy):
     # Startup candles needed for indicators
     startup_candle_count = 200
 
-    # ROI table - balanced approach
+    # ROI table - more achievable targets
     minimal_roi = {
-        "0": 0.08,   # 8% if immediate
-        "20": 0.05,  # 5% after 20 min
-        "40": 0.03,  # 3% after 40 min
-        "60": 0.01   # 1% after 1 hour
+        "0": 0.020,   # 2% if immediate
+        "20": 0.015,  # 1.5% after 20 min
+        "40": 0.010,  # 1% after 40 min
+        "90": 0.005   # 0.5% after 90 min
     }
 
-    # Stoploss
-    stoploss = -0.10  # 10% hard stop (tighter than LEA)
+    # Stoploss - fixed like LeaFreqAI
+    stoploss = -0.05  # 5% hard stop (proven optimal)
 
-    # Trailing stop
-    trailing_stop = True
-    trailing_stop_positive = 0.01
-    trailing_stop_positive_offset = 0.015
-    trailing_only_offset_is_reached = True
+    # Trailing stop - disabled to avoid killing profits
+    trailing_stop = False
 
-    # Exit settings
-    use_exit_signal = True
+    # Exit settings - DISABLED aggressive exit signals
+    use_exit_signal = False
     exit_profit_only = False
     ignore_roi_if_entry_signal = False
 
@@ -253,44 +250,21 @@ class HybridAIStrategy(IStrategy):
 
     def populate_exit_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         """
-        HYBRID Exit: ML predictions OR Traditional signals
+        Conservative Exit: Let ROI table and stoploss handle exits
 
-        Exit if EITHER condition is met:
-        - AI: Negative prediction
-        - Technical: MACD bearish OR RSI overbought
+        NO exit signals - aggressive exits were killing profitable trades
+        ROI table will handle profit-taking automatically
+        Stoploss will handle risk management
         """
         # Check if predictions are available
         if "&-target" not in dataframe.columns:
             dataframe["exit_long"] = 0
             return dataframe
 
-        conditions = []
-
-        # === AI EXIT ===
-        # Negative prediction
-        ai_exit = dataframe["&-target"] < -0.001
-
-        # === TECHNICAL EXIT ===
-        # MACD bearish - find columns dynamically
-        macd_cols = [col for col in dataframe.columns if col.startswith('macd') and '_gen_' in col and not col.startswith('macdsignal')]
-        macdsig_cols = [col for col in dataframe.columns if col.startswith('macdsignal') and '_gen_' in col]
-        if macd_cols and macdsig_cols:
-            macd_exit = dataframe[macd_cols[0]] < dataframe[macdsig_cols[0]]
-        else:
-            macd_exit = False
-
-        # RSI extreme overbought - find column dynamically
-        rsi_cols = [col for col in dataframe.columns if 'rsi' in col.lower() and '_gen_' in col]
-        if rsi_cols:
-            rsi_exit = dataframe[rsi_cols[0]] > 80
-        else:
-            rsi_exit = False
-
-        # Combine with OR logic (exit if any condition)
-        dataframe.loc[
-            ai_exit | macd_exit | rsi_exit,
-            "exit_long"
-        ] = 1
+        # NO EXIT SIGNALS - let ROI and stoploss do the work
+        # This prevents the aggressive exits that were causing 70% of trades
+        # to exit at losses instead of hitting profit targets
+        dataframe["exit_long"] = 0
 
         return dataframe
 
@@ -328,11 +302,11 @@ class HybridAIStrategy(IStrategy):
         last_candle = dataframe.iloc[-1]
 
         # Check if predictions are available
-        if "&-prediction" not in dataframe.columns:
+        if "&-target" not in dataframe.columns:
             return proposed_stake
 
-        # Get prediction confidence
-        prediction = last_candle["&-prediction"]
+        # Get prediction confidence (use &-target, not &-prediction)
+        prediction = last_candle["&-target"]
 
         # Scale stake by prediction magnitude (0.7x to 1.3x) - more conservative
         confidence_multiplier = np.clip(1.0 + (prediction * 5), 0.7, 1.3)
