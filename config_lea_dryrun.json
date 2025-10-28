@@ -1,0 +1,89 @@
+{
+    "$schema": "https://schema.freqtrade.io/schema.json",
+    "max_open_trades": 3,
+    "stake_currency": "BTC",
+    "stake_amount": 0.01,
+    "tradable_balance_ratio": 0.99,
+    "fiat_display_currency": "USD",
+    "dry_run": true,
+    "dry_run_wallet": 1,
+    "cancel_open_orders_on_exit": false,
+    "trading_mode": "spot",
+    "margin_mode": "",
+    "timeframe": "5m",
+    "unfilledtimeout": {
+        "entry": 10,
+        "exit": 10,
+        "exit_timeout_count": 0,
+        "unit": "minutes"
+    },
+    "freqai": {
+        "enabled": true,
+        "train_period_days": 30,
+        "backtest_period_days": 7,
+        "identifier": "lea_relaxed_di",
+        "live_retrain_hours": 0,
+        "purge_old_models": 5,
+        "save_backtest_models": true,
+        "feature_parameters": {
+            "include_timeframes": ["5m", "15m", "1h"],
+            "include_corr_pairlist": [],
+            "label_period_candles": 12,
+            "include_shifted_candles": 2,
+            "indicator_periods_candles": [14, 20, 50, 200],
+            "DI_threshold": 10,
+            "weight_factor": 0.9,
+            "principal_component_analysis": false,
+            "use_SVM_to_remove_outliers": false
+        },
+        "data_split_parameters": {
+            "test_size": 0.25,
+            "shuffle": false
+        },
+        "model_training_parameters": {
+            "n_estimators": 100,
+            "learning_rate": 0.1,
+            "max_depth": 6
+        }
+    },
+    "entry_pricing": {
+        "price_side": "same",
+        "use_order_book": true,
+        "order_book_top": 1,
+        "price_last_balance": 0.0
+    },
+    "exit_pricing": {
+        "price_side": "same",
+        "use_order_book": true,
+        "order_book_top": 1
+    },
+    "exchange": {
+        "name": "binance",
+        "key": "",
+        "secret": "",
+        "ccxt_config": {},
+        "ccxt_async_config": {},
+        "pair_whitelist": [
+            "UNI/BTC",
+            "LTC/BTC",
+            "ADA/BTC"
+        ],
+        "pair_blacklist": []
+    },
+    "pairlists": [
+        {
+            "method": "StaticPairList"
+        }
+    ],
+    "api_server": {
+        "enabled": false,
+        "listen_ip_address": "127.0.0.1",
+        "listen_port": 9090,
+        "username": "user",
+        "password": "pass"
+    },
+    "bot_name": "hybrid_dryrun",
+    "initial_state": "running",
+    "strategy": "HybridAIStrategy",
+    "freqaimodel": "XGBoostRegressor"
+}
