@@ -194,6 +194,12 @@ class LeaFreqAIStrategy(IStrategy):
         # FreqAI will add predictions to the target column
         dataframe = self.freqai.start(dataframe, metadata, self)
 
+        # Calculate RSI and other indicators needed for entry/exit logic
+        # (FreqAI doesn't preserve all features from feature_engineering)
+        dataframe["rsi"] = ta.RSI(dataframe, timeperiod=14)
+        dataframe["ema_50"] = ta.EMA(dataframe, timeperiod=50)
+        dataframe["ema_200"] = ta.EMA(dataframe, timeperiod=200)
+
         # DEBUG: Check if predictions were added
         if "&-target" in dataframe.columns:
             pred_col = dataframe["&-target"]
@@ -216,9 +222,6 @@ class LeaFreqAIStrategy(IStrategy):
             logger.warning(f"[{metadata['pair']}] No &-target column in populate_entry_trend!")
             dataframe["enter_long"] = 0
             return dataframe
-
-        # Recalculate EMA (FreqAI doesn't preserve it from populate_indicators)
-        dataframe["ema_50"] = ta.EMA(dataframe, timeperiod=50)
 
         conditions = []
 
@@ -261,9 +264,6 @@ class LeaFreqAIStrategy(IStrategy):
             dataframe["exit_long"] = 0
             return dataframe
 
-        # Recalculate EMA (FreqAI doesn't preserve it from populate_indicators)
-        dataframe["ema_50"] = ta.EMA(dataframe, timeperiod=50)
-
         # ONLY exit on strong negative ML prediction
         # Let ROI and stoploss handle everything else
         dataframe.loc[
@@ -280,10 +280,6 @@ class LeaFreqAIStrategy(IStrategy):
         NOTE: Predictions are in &-target column, not &-prediction!
         """
         dataframe, _ = self.dp.get_analyzed_dataframe(pair, self.timeframe)
-        
-        # Recalculate EMA (FreqAI doesn't preserve it from populate_indicators)
-        dataframe["ema_50"] = ta.EMA(dataframe, timeperiod=50)
-        
         last_candle = dataframe.iloc[-1]
 
         # Check if predictions are available
