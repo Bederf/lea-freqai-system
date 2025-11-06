@@ -14,6 +14,15 @@ from technical import qtpylib
 
 from freqtrade.strategy import IStrategy, merge_informative_pair
 
+# Import research data loader for backtest/hyperopt enhancement
+try:
+    from binance_research_backtest_loader import BinanceBacktestResearchLoader
+    RESEARCH_LOADER_AVAILABLE = True
+except ImportError:
+    RESEARCH_LOADER_AVAILABLE = False
+    logger_init = logging.getLogger(__name__)
+    logger_init.warning("Research loader not available - running without Binance research data")
+
 logger = logging.getLogger(__name__)
 
 
@@ -97,6 +106,23 @@ class LeaFreqAIStrategy(IStrategy):
                 }
             }
         }
+
+    def __init__(self, config: dict) -> None:
+        """
+        Initialize strategy with research loader
+        """
+        super().__init__(config)
+
+        # Initialize research data loader
+        self.research_loader = None
+        self.research_data_cache = {}  # Cache loaded research data by symbol
+
+        if RESEARCH_LOADER_AVAILABLE:
+            try:
+                self.research_loader = BinanceBacktestResearchLoader()
+                logger.info("Research loader initialized successfully")
+            except Exception as e:
+                logger.warning(f"Failed to initialize research loader: {e}")
 
     def feature_engineering_expand_all(self, dataframe: DataFrame, period: int,
                                        metadata: dict, **kwargs) -> DataFrame:
@@ -189,8 +215,54 @@ class LeaFreqAIStrategy(IStrategy):
     def populate_indicators(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         """
         FreqAI will populate predictions here
+        Also loads Binance research data for ML feature enhancement
         NOTE: Predictions are returned in the TARGET column (&-target), not &-prediction!
         """
+        # Load research data if available (once per pair)
+        if self.research_loader and RESEARCH_LOADER_AVAILABLE:
+            pair = metadata.get("pair", "")
+            symbol = pair.split('/')[0] if '/' in pair else pair
+
+            if symbol not in self.research_data_cache:
+                try:
+                    # Load research data for backtest period
+                    research_data = self.research_loader.load_research_data(
+                        symbol=symbol,
+                        start_date='2025-09-20',
+                        end_date='2025-10-27'
+                    )
+                    self.research_data_cache[symbol] = research_data
+                    logger.info(f"[{pair}] Loaded research data for {symbol}: {len(research_data)} rows")
+                except Exception as e:
+                    logger.warning(f"[{pair}] Failed to load research data for {symbol}: {e}")
+                    self.research_data_cache[symbol] = None
+
+            # Add research features to dataframe if available
+            if self.research_data_cache.get(symbol) is not None:
+                try:
+                    research_data = self.research_data_cache[symbol]
+
+                    # Extract date from dataframe timestamps and merge research features
+                    dataframe['date_only'] = pd.to_datetime(dataframe['date']).dt.date
+
+                    # Add each research feature
+                    for idx, row in dataframe.iterrows():
+                        candle_date = row['date_only']
+                        features = self.research_loader.get_research_features_for_candle(
+                            candle_date, symbol, research_data
+                        )
+                        for feature_name, feature_value in features.items():
+                            dataframe.loc[idx, f"&{feature_name}"] = feature_value
+
+                    # Log added features
+                    research_cols = [col for col in dataframe.columns if col.startswith('&') and not col.startswith('&-')]
+                    logger.info(f"[{pair}] Added {len(research_cols)} research features: {research_cols[:3]}...")
+
+                    # Drop temporary date column
+                    dataframe = dataframe.drop(columns=['date_only'])
+                except Exception as e:
+                    logger.warning(f"[{pair}] Error adding research features: {e}")
+
         # FreqAI will add predictions to the target column
         dataframe = self.freqai.start(dataframe, metadata, self)
 

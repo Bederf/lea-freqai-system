@@ -1,0 +1,62 @@
+{
+  "binance": {
+    "enabled": true,
+    "api_key": "",
+    "api_secret": "",
+    "description": "Binance API for price, volume, orderbook data (FREE)"
+  },
+  "coingecko": {
+    "enabled": true,
+    "api_key": "",
+    "tier": "free",
+    "description": "CoinGecko for market sentiment data (FREE tier available, PRO $10/mo)"
+  },
+  "alternative_me": {
+    "enabled": true,
+    "description": "Fear & Greed Index (FREE)"
+  },
+  "glassnode": {
+    "enabled": false,
+    "api_key": "",
+    "tier": "free",
+    "cost": "$25-500/month",
+    "features": ["advanced_on_chain", "mvrv_ratio", "sopr_ratio", "exchange_reserve"],
+    "description": "Advanced on-chain metrics (OPTIONAL, PAID)"
+  },
+  "santiment": {
+    "enabled": false,
+    "api_key": "",
+    "tier": "free",
+    "cost": "$25-200/month",
+    "features": ["social_sentiment", "twitter_sentiment", "whale_alerts"],
+    "description": "Social sentiment and whale tracking (OPTIONAL, PAID)"
+  },
+  "cache": {
+    "enabled": true,
+    "cache_dir": "/home/bederf/freqtrade/cache/research_data",
+    "cache_ttl_seconds": 300,
+    "description": "Cache times: 5min (prices), 10min (flows), 1hr (fundamentals)"
+  },
+  "update_frequencies": {
+    "fear_greed": "daily",
+    "sentiment": "hourly",
+    "exchange_flows": "5_minutes",
+    "whale_movements": "5_minutes",
+    "liquidity": "5_minutes",
+    "funding_rate": "1_minute",
+    "composite_signal": "5_minutes"
+  },
+  "signal_weights": {
+    "sentiment": 0.3,
+    "whale_flow": 0.3,
+    "exchange_flow": 0.2,
+    "liquidity": 0.1,
+    "funding": 0.1
+  },
+  "thresholds": {
+    "whale_movement_usd": 1000000,
+    "large_trade_usd": 100000,
+    "sentiment_threshold": 0.2,
+    "whale_significance": 0.15
+  }
+}
