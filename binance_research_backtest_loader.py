@@ -391,17 +391,21 @@ class BinanceBacktestResearchLoader:
         """
         Get research features for a specific candle
         Used during backtest populate_indicators()
-        
+
         Args:
-            candle_date: Candle timestamp
+            candle_date: Candle timestamp (datetime or date)
             symbol: Trading symbol
             research_data: Research dataframe loaded from load_research_data()
-        
+
         Returns:
             Dict with research features
         """
         try:
-            date = candle_date.date()
+            # Handle both datetime and date objects
+            if hasattr(candle_date, 'date') and callable(candle_date.date):
+                date = candle_date.date()
+            else:
+                date = candle_date
             
             # Find matching row
             row = research_data[research_data['date'] == date]
