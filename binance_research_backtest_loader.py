@@ -373,8 +373,8 @@ class BinanceBacktestResearchLoader:
         if not fear_greed.empty:
             result = result.merge(fear_greed, on='date', how='left')
         
-        # Fill missing values
-        result = result.fillna(method='ffill').fillna(0)
+        # Fill missing values (Fixed: fillna(method='ffill') deprecated in pandas 2.x)
+        result = result.ffill().fillna(0)
         
         # Save to cache
         result.to_csv(cache_file, index=False)
