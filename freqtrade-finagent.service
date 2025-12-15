@@ -1,0 +1,14 @@
+[Unit]
+Description=Freqtrade FinAgent Strategy (Safety/Risk Management Focus)
+After=network.target
+
+[Service]
+Type=simple
+User=bederf
+WorkingDirectory=/home/bederf/freqtrade
+ExecStart=/home/bederf/freqtrade/.venv/bin/freqtrade trade --config /home/bederf/freqtrade/config_finagent.json --strategy FinAgentStrategy_v2_RiskManaged --dry-run
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
