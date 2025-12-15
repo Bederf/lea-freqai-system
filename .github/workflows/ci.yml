@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - stable
-      - develop
       - ci/*
     tags:
   release:
