@@ -1,0 +1,22 @@
+{
+  "contexts": {},
+  "epsilon": 0.1,
+  "alpha": 0.1,
+  "last_updated": null,
+  "total_trades_processed": 0,
+  "info": {
+    "description": "Contextual bandit strategy selector Q-values",
+    "strategies": [
+      "LeaFreqAIStrategy",
+      "HybridAIStrategy"
+    ],
+    "context_dimensions": {
+      "volatility": ["low", "med", "high"],
+      "trend": ["down", "flat", "up"],
+      "time": ["morning", "day", "evening"]
+    },
+    "total_possible_contexts": 27,
+    "reward_optimization": "Consistent small wins (frequent, low-risk profits)",
+    "update_frequency": "Daily or after N trades via update_bandit.sh"
+  }
+}
