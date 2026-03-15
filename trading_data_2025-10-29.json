@@ -1,0 +1,246 @@
+{
+  "report_metadata": {
+    "date": "2025-10-29",
+    "report_time": "22:13:00 SAST",
+    "report_type": "daily_trading_summary",
+    "trading_mode": "DRY_RUN",
+    "system": "lea-freqai-system"
+  },
+  "summary": {
+    "total_bots": 2,
+    "total_trades": 0,
+    "combined_pnl_btc": 0.0,
+    "combined_pnl_usd": 0.0,
+    "btc_usd_rate": 95000
+  },
+  "bot1_lea_freqai": {
+    "metadata": {
+      "pid": 477591,
+      "status": "running",
+      "strategy": "LeaFreqAIStrategy",
+      "model": "PyTorchMLPRegressor",
+      "database": "tradesv3.sqlite",
+      "started": "2025-10-29T06:09:00",
+      "uptime_hours": 16
+    },
+    "performance": {
+      "trades_today": 0,
+      "open_positions": 0,
+      "pnl_btc": 0.0,
+      "pnl_usd": 0.0
+    },
+    "predictions": {
+      "timestamp": "2025-10-29T22:10:00",
+      "pairs": {
+        "UNI/BTC": {
+          "rows_analyzed": 1191,
+          "mean_prediction": 0.005268,
+          "min_prediction": 0.004715,
+          "max_prediction": 0.006523,
+          "positive_predictions_pct": 100.0,
+          "entry_signals_generated": 108,
+          "trade_executed": false,
+          "rejection_reason": "additional_filters_blocking"
+        },
+        "LTC/BTC": {
+          "rows_analyzed": 1191,
+          "mean_prediction": 0.007810,
+          "min_prediction": 0.007267,
+          "max_prediction": 0.008545,
+          "positive_predictions_pct": 100.0,
+          "entry_signals_generated": 116,
+          "trade_executed": false,
+          "rejection_reason": "additional_filters_blocking"
+        },
+        "ADA/BTC": {
+          "rows_analyzed": 1191,
+          "mean_prediction": 0.001129,
+          "min_prediction": 0.000459,
+          "max_prediction": 0.002696,
+          "positive_predictions_pct": 100.0,
+          "entry_signals_generated": 0,
+          "trade_executed": false,
+          "rejection_reason": "weak_predictions"
+        }
+      }
+    },
+    "prediction_history_samples": [
+      {
+        "time": "21:55:00",
+        "UNI_BTC_mean": 0.005268,
+        "LTC_BTC_mean": 0.007810,
+        "ADA_BTC_mean": 0.001129
+      },
+      {
+        "time": "22:00:00",
+        "UNI_BTC_mean": 0.005268,
+        "LTC_BTC_mean": 0.007810,
+        "ADA_BTC_mean": 0.001129
+      },
+      {
+        "time": "22:05:00",
+        "UNI_BTC_mean": 0.005268,
+        "LTC_BTC_mean": 0.007810,
+        "ADA_BTC_mean": 0.001129
+      },
+      {
+        "time": "22:10:00",
+        "UNI_BTC_mean": 0.005268,
+        "LTC_BTC_mean": 0.007810,
+        "ADA_BTC_mean": 0.001129
+      }
+    ]
+  },
+  "bot2_finagent": {
+    "metadata": {
+      "pid": 3547,
+      "status": "running",
+      "strategy": "LeaFinAgentStrategy",
+      "model": "PyTorchMLPRegressor",
+      "database": "tradesv3_finagent.dryrun.sqlite",
+      "started": "2025-10-28T00:00:00",
+      "uptime_hours": 41
+    },
+    "performance": {
+      "trades_today": 0,
+      "open_positions": 0,
+      "pnl_btc": 0.0,
+      "pnl_usd": 0.0
+    },
+    "regime_analysis": {
+      "timestamp": "2025-10-29T22:10:00",
+      "pairs": {
+        "UNI/BTC": {
+          "regime": "uncertain",
+          "risk_multiplier": 0.70,
+          "pattern_confidence": 1.00,
+          "trade_executed": false,
+          "rejection_reason": "uncertain_regime_conservative_mode"
+        },
+        "LTC/BTC": {
+          "regime": "ranging",
+          "risk_multiplier": 0.80,
+          "pattern_confidence": 1.00,
+          "trade_executed": false,
+          "rejection_reason": "conservative_after_losses"
+        },
+        "ADA/BTC": {
+          "regime": "uncertain",
+          "risk_multiplier": 0.70,
+          "pattern_confidence": 1.00,
+          "trade_executed": false,
+          "rejection_reason": "uncertain_regime_conservative_mode"
+        }
+      }
+    },
+    "regime_history_samples": [
+      {
+        "time": "21:45:00",
+        "UNI_BTC_regime": "uncertain",
+        "LTC_BTC_regime": "ranging",
+        "ADA_BTC_regime": "uncertain"
+      },
+      {
+        "time": "21:50:00",
+        "UNI_BTC_regime": "uncertain",
+        "LTC_BTC_regime": "ranging",
+        "ADA_BTC_regime": "uncertain"
+      },
+      {
+        "time": "21:55:00",
+        "UNI_BTC_regime": "uncertain",
+        "LTC_BTC_regime": "ranging",
+        "ADA_BTC_regime": "uncertain"
+      },
+      {
+        "time": "22:00:00",
+        "UNI_BTC_regime": "uncertain",
+        "LTC_BTC_regime": "ranging",
+        "ADA_BTC_regime": "uncertain"
+      },
+      {
+        "time": "22:05:00",
+        "UNI_BTC_regime": "uncertain",
+        "LTC_BTC_regime": "ranging",
+        "ADA_BTC_regime": "uncertain"
+      },
+      {
+        "time": "22:10:00",
+        "UNI_BTC_regime": "uncertain",
+        "LTC_BTC_regime": "ranging",
+        "ADA_BTC_regime": "uncertain"
+      }
+    ]
+  },
+  "comparison_to_previous_day": {
+    "date_compared": "2025-10-28",
+    "metrics": {
+      "trades": {
+        "yesterday": 10,
+        "today": 0,
+        "change_pct": -100
+      },
+      "pnl_btc": {
+        "yesterday": -0.02841801,
+        "today": 0.0,
+        "change": 0.02841801
+      },
+      "win_rate_pct": {
+        "yesterday": 20.0,
+        "today": null
+      }
+    },
+    "analysis": "Complete trading halt today after yesterday's losses. Conservative risk management in effect."
+  },
+  "market_conditions": {
+    "overall_sentiment": "uncertain",
+    "regime_distribution": {
+      "uncertain": 4,
+      "ranging": 2,
+      "trending": 0
+    },
+    "avg_risk_multiplier": 0.73,
+    "notes": "Majority of pairs flagged as uncertain. Both bots adopting conservative stance."
+  },
+  "technical_health": {
+    "bot1": {
+      "process_status": "healthy",
+      "cpu_usage_pct": 11.7,
+      "memory_usage_pct": 35.9,
+      "heartbeat_interval_sec": 60,
+      "last_heartbeat": "2025-10-29T22:13:43"
+    },
+    "bot2": {
+      "process_status": "healthy",
+      "cpu_usage_pct": 11.1,
+      "memory_usage_pct": 19.4,
+      "heartbeat_interval_sec": 60,
+      "last_heartbeat": "2025-10-29T22:14:08"
+    }
+  },
+  "action_items": [
+    "Verify entry rejection reasons in detailed logs",
+    "Check if database reset occurred",
+    "Evaluate if entry criteria too conservative",
+    "Monitor next 24-48h for any trade executions",
+    "Consider adjusting thresholds if no activity continues"
+  ],
+  "backtesting_notes": {
+    "data_quality": "No actual trades to backtest today",
+    "prediction_data": "Available for analysis - 100% bullish predictions",
+    "regime_data": "Available - shows uncertain market conditions",
+    "recommendations": [
+      "Backtest current entry filter settings vs relaxed settings",
+      "Validate AI prediction accuracy against actual price movements",
+      "Test regime detection accuracy retrospectively",
+      "Simulate trades with current predictions to estimate opportunity cost"
+    ]
+  },
+  "log_file_paths": {
+    "bot1_main_log": "/home/pi/lea-freqai-system/freqtrade.log",
+    "bot2_main_log": "/home/pi/lea-freqai-system/freqtrade_finagent.log",
+    "bot1_specific": "/home/pi/lea-freqai-system/freqtrade_bot.log",
+    "bot2_specific": "/home/pi/lea-freqai-system/finagent_bot.log"
+  },
+  "data_export_timestamp": "2025-10-29T22:13:00+02:00"
+}
