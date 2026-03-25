@@ -8,6 +8,11 @@
 
 ## 📚 Quick Navigation
 
+### Operations
+
+- **`DAILY_SCORECARD.md`** - Daily health and PnL review for `lea`, `finagent`, and `diagnostic`
+- **`docs/systemd-services/README.md`** - Service management, logs, and monitoring commands
+
 ### 🆕 New User? Start Here:
 
 1. **`STRATEGY_SUMMARY.md`** (6KB) - **READ THIS FIRST**
@@ -657,4 +662,3 @@ Your LEA FreqAI bot is:
 **Last Updated:** 2025-10-20  
 **Version:** 1.3 Optimized  
 **Next Review:** After 1-2 weeks dry-run testing
-
