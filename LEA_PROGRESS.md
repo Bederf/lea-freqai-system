@@ -1,5 +1,7 @@
 # LEA Strategy Implementation Progress
 
+> Historical note: this is an implementation history log for an earlier LEA strategy phase. It does not fully reflect the current repo-wide multi-bot setup.
+
 **Date:** 2025-10-20
 **Status:** ✅ OPTIMIZED & READY FOR PRODUCTION
 

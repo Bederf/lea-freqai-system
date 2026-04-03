@@ -148,7 +148,7 @@ If you're setting up fresh:
 
 ```bash
 # If using systemd:
-sudo systemctl restart freqtrade-bot1
+sudo systemctl restart freqtrade-lea
 
 # Or manually:
 pkill -f "freqtrade.*config.json"
@@ -185,4 +185,3 @@ You should see:
 **Bot:** LEA-LSTM Strategy (Bot 1)  
 **Status:** ✅ Active and Running  
 **Mode:** Dry-run (Paper Trading)
-

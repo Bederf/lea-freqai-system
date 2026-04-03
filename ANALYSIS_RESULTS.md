@@ -39,6 +39,10 @@ Comprehensive analysis of two FreqTrade bots running LEA-LSTM and FinAgent strat
 - ✅ Position sizing reasonable (0.3 BTC each)
 - ✅ Stop-losses configured correctly
 
+### Diagnostic Gate Logging
+- DiagnosticStrategy now emits per-pair gate summaries, blocked-entry notices, and stake adjustments (`gate_summary`, `buy_blocked`, `stake_adjusted`) so you can see whether weak signals are being filtered and how aggressively the risk multiplier scales stake sizes.
+- That logging gives you the data to tune the confidence threshold (currently 0.45) and stake bands before adding volatility/VaR layers.
+
 ## Recommendations Implemented
 
 ✅ Started Bot 2 (FinAgent) for strategy diversification  
@@ -66,21 +70,25 @@ Comprehensive analysis of two FreqTrade bots running LEA-LSTM and FinAgent strat
 ## System Setup
 
 ### Auto-Start Services
-Both bots now start automatically on system boot:
-- `freqtrade-bot1.service` - LEA-LSTM Strategy
-- `freqtrade-bot2.service` - FinAgent Strategy
+All three service units now come up automatically on boot:
+- `freqtrade-lea.service` — LEA-LSTM (growth/opportunity) strategy
+- `freqtrade-finagent.service` — FinAgent (safety/risk management) strategy
+- `freqtrade-diagnostic.service` — diagnostic/monitoring strategy
 
 **Features:**
 - Auto-start on boot
-- Auto-restart on failure
-- Systemd log management
-- Survives SSH disconnection
+- Automatic restart on failure
+- Systemd log capture via `journalctl`
+- Isolation inside the repo virtualenv
 
 **Management:**
 ```bash
-sudo systemctl status freqtrade-bot1    # Check status
-sudo systemctl restart freqtrade-bot1   # Restart bot
-sudo journalctl -u freqtrade-bot1 -f   # View logs
+sudo systemctl status freqtrade-lea
+sudo systemctl status freqtrade-finagent
+sudo systemctl status freqtrade-diagnostic
+sudo journalctl -u freqtrade-lea -f
+sudo journalctl -u freqtrade-finagent -f
+sudo journalctl -u freqtrade-diagnostic -f
 ```
 
 ## Documentation
@@ -134,4 +142,3 @@ Systemd setup in `docs/systemd-services/`:
 **Analyst**: AI-Assisted Analysis  
 **Status**: ✅ Analysis Complete | ⏳ Improvements Pending  
 **Mode**: Dry-run (Paper Trading)
-

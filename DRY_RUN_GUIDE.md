@@ -1,4 +1,6 @@
 # Dry Run Trading Guide
+
+> Historical note: this guide reflects an older dry-run setup and older DB/service assumptions. For the current repo workflow, use `CURRENT_STATE.md`, `DAILY_SCORECARD.md`, and `docs/systemd-services/README.md`.
 **Purpose**: Validate bot performance in real market conditions without risking real capital
 **Status**: Ready to use - config already supports dry run mode
 

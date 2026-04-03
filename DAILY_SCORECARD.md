@@ -1,10 +1,11 @@
 # Daily Scorecard
 
-`scripts/daily_scorecard.py` gives a one-command operating summary for the three paper-trading bots:
+`scripts/daily_scorecard.py` gives a one-command operating summary for the paper-trading bots:
 
 - `lea`
 - `finagent`
 - `diagnostic`
+- `bbrsi`
 
 It pulls data from the live trade databases in `user_data/tradesv3_*.sqlite`, reads the latest local `5m` feather candles from `user_data/data/binance`, and uses recent heartbeat lines in each bot log to label the bot as `running`, `stale`, or `unknown`.
 
@@ -60,3 +61,5 @@ Use the scorecard to answer three practical questions before moving any bot towa
 3. Are open positions behaving sensibly instead of sitting stale or churning?
 
 The scorecard is meant to be a daily operating view, not a replacement for deeper trade-by-trade review.
+
+For backtesting and hyperopt on the current bot versions, use [BOT_RESEARCH_WORKFLOW.md](/home/bederf/lea-freqai-system/BOT_RESEARCH_WORKFLOW.md) and [research_bots.sh](/home/bederf/lea-freqai-system/scripts/research_bots.sh).

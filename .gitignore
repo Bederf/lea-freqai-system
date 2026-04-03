@@ -120,3 +120,4 @@ target/
 user_data/strategies/.archive/
 
 docker-compose-*.yml
+room_monitoring/

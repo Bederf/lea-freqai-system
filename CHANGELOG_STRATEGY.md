@@ -1,5 +1,7 @@
 # LeaFreqAIStrategy - Code Changes Log
 
+> Historical note: this change log documents a 2025 LEA optimization pass. It should be read as implementation history, not as the current operational runbook for this repository.
+
 **File:** `user_data/strategies/LeaFreqAIStrategy.py`  
 **Optimization Date:** 2025-10-20  
 **Status:** Production Ready
@@ -725,4 +727,3 @@ use_exit_signal = False  # ROI exits better
 **Date:** 2025-10-20  
 **Tested:** 15+ configurations, 49 days historical data  
 **Result:** Production-ready ✅
-

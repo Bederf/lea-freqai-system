@@ -1,86 +1,78 @@
-# Systemd Auto-Start Services
+# Systemd Services for LEA FreqAI Bots
 
-This directory contains systemd service files for automatically starting the FreqTrade bots on system boot.
+This directory now stores the unit files and helper scripts that keep the current LEA FreqAI bots running as services on every boot.
 
-## Files
+## Included unit files
+- `freqtrade-lea.service` — LEA FreqAI strategy (growth/opportunity focus, port 8080, `user_data/config.json`)
+- `freqtrade-finagent.service` — FinAgent strategy (safety/risk management focus, port 8081, `user_data/config_finagent.json`)
+- `freqtrade-diagnostic.service` — Diagnostic/monitoring strategy that keeps an eye on data quality and health metrics
 
-- `freqtrade-bot1.service` - Service file for Bot 1 (LEA-LSTM Strategy)
-- `freqtrade-bot2.service` - Service file for Bot 2 (FinAgent Strategy)
-- `setup_autostart.sh` - Automated setup script
+Each unit lives at the repository root so you can copy it straight to `/etc/systemd/system/` and keep version control on every change.
 
 ## Installation
 
 ```bash
-sudo ./setup_autostart.sh
+sudo ./docs/systemd-services/setup_autostart.sh
 ```
 
-This will:
-1. Install systemd service files
-2. Enable auto-start on boot
-3. Start both bots as services
-4. Configure automatic restart on failure
+The script copies each unit to `/etc/systemd/system`, reloads `systemd`, stops any manual `freqtrade trade` processes, enables the units for boot, starts all three bots, and then dumps the short `systemctl status` output for quick verification.
 
 ## Manual Installation
 
 ```bash
-# Copy service files
-sudo cp freqtrade-bot1.service /etc/systemd/system/
-sudo cp freqtrade-bot2.service /etc/systemd/system/
+REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+sudo cp "$REPO_ROOT/freqtrade-lea.service" /etc/systemd/system/
+sudo cp "$REPO_ROOT/freqtrade-finagent.service" /etc/systemd/system/
+sudo cp "$REPO_ROOT/freqtrade-diagnostic.service" /etc/systemd/system/
 
-# Set permissions
-sudo chmod 644 /etc/systemd/system/freqtrade-bot*.service
-
-# Reload systemd
+sudo chmod 644 /etc/systemd/system/freqtrade-*.service
 sudo systemctl daemon-reload
 
-# Enable and start services
-sudo systemctl enable freqtrade-bot1.service
-sudo systemctl enable freqtrade-bot2.service
-sudo systemctl start freqtrade-bot1.service
-sudo systemctl start freqtrade-bot2.service
+sudo systemctl enable freqtrade-lea
+sudo systemctl enable freqtrade-finagent
+sudo systemctl enable freqtrade-diagnostic
+
+sudo systemctl start freqtrade-lea
+sudo systemctl start freqtrade-finagent
+sudo systemctl start freqtrade-diagnostic
 ```
 
-## Management Commands
+## Common Management Commands
 
 ```bash
-# Check status
-sudo systemctl status freqtrade-bot1
-sudo systemctl status freqtrade-bot2
+sudo systemctl status freqtrade-lea
+sudo systemctl status freqtrade-finagent
+sudo systemctl status freqtrade-diagnostic
 
-# Start/stop
-sudo systemctl start freqtrade-bot1
-sudo systemctl stop freqtrade-bot1
-sudo systemctl restart freqtrade-bot1
-
-# Enable/disable auto-start
-sudo systemctl enable freqtrade-bot1
-sudo systemctl disable freqtrade-bot1
-
-# View logs
-sudo journalctl -u freqtrade-bot1 -f
-sudo journalctl -u freqtrade-bot2 -f
+sudo journalctl -u freqtrade-lea -f
+sudo journalctl -u freqtrade-finagent -f
+sudo journalctl -u freqtrade-diagnostic -f
 ```
+
+If you need to stop or restart a subset, use the same service names.
 
 ## Service Details
 
-### Bot 1 (LEA-LSTM Strategy)
-- Port: 8080
-- Config: user_data/config.json
-- Strategy: LeaFreqAIStrategy
-- Log: freqtrade.log
+| Service | Strategy | Config | Log |
+|---------|----------|--------|-----|
+| `freqtrade-lea` | LeaFreqAIStrategy (growth/opportunity) | `user_data/config.json` | `logs/freqtrade_lea.log` |
+| `freqtrade-finagent` | FinAgentStrategy_v2_RiskManaged | `user_data/config_finagent.json` | `logs/finagent.log` |
+| `freqtrade-diagnostic` | DiagnosticStrategy | `user_data/config_diagnostic.json` | `logs/freqtrade_diagnostic.log` |
 
-### Bot 2 (FinAgent Strategy)
-- Port: 8081
-- Config: user_data/config_finagent.json
-- Strategy: LeaFinAgentStrategy
-- Log: freqtrade_finagent.log
+All services inherit environment variables from `.env` via the `EnvironmentFile` directive and run inside the same virtual environment as local commands.
 
-## Features
+## Monitoring Tips
 
-- ✅ Auto-start on system boot
-- ✅ Automatic restart on failure
-- ✅ Background service operation
-- ✅ Systemd log management
-- ✅ Survives SSH disconnection
-- ✅ Environment variable support from .env file
+- The [`monitor_three_bots.sh`](../monitor_three_bots.sh) dashboard reads the same `user_data/tradesv3_*` databases that the services write to. It now assumes `close_profit_abs` instead of the deprecated `profit_abs` column.
+- The [`scripts/daily_scorecard.py`](../../scripts/daily_scorecard.py) report is the quickest daily health check. It summarizes heartbeat status, entries/exits for the day, realized PnL, and unrealized PnL for currently open trades across `lea`, `finagent`, and `diagnostic`.
+- The scorecard usage and field definitions are documented in [`DAILY_SCORECARD.md`](../../DAILY_SCORECARD.md).
+- Each unit also runs a `freqtrade freqai train` `ExecStartPre` so the persisted model is rebuilt with the current feature/indicator mix before the trading loop begins; training logs land in `logs/*_freqai_train.log`.
+- Keep an eye on `journalctl -u freqtrade-diagnostic` for training issues or stuck orders. If the diagnostic bot reports repeated `amount=0` open trades, the `orders` table can be inspected for cancelled buy attempts.
+- The diagnostic strategy now logs a gate summary plus block/adjust lines (e.g., `gate_summary pair=UNI/BTC ... allow_trade=yes risk_multiplier=0.35`) so you can see how signal quality influences trade approval and stake sizing before you add any VaR layer.
+- When machines lose connectivity, the `Restart=always` policy will bring the services back online; use `systemctl restart` only if a manual recovery is needed.
 
+## Troubleshooting
+
+- `systemctl status` or `journalctl` will show the exact command line, PID, and recent logs for each service.
+- Use `tail -f logs/*.log` to watch strategy-specific output.
+- If you change `.env`, reload the daemon and restart the relevant services to pick up updated credentials.

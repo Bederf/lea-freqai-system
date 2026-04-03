@@ -1,5 +1,7 @@
 # 🚀 LEA Bot - Quick Start Reference
 
+> Historical note: this quickstart uses older paths and a previous single-bot deployment flow. Use `CURRENT_STATE.md` and `docs/systemd-services/README.md` for the current multi-bot service setup.
+
 ## ⚡ TL;DR - Start Your Bot
 
 ```bash
@@ -168,8 +170,9 @@ In Telegram chat with your bot:
 - **`LEA_PROGRESS.md`** - Full implementation progress & changelog
 
 **Setup & Usage:**
-- **`LEA_STARTUP_FIXED.md`** - Startup issues & fixes
-- **`QUICK_START.md`** - This file (quick reference)
+- **`CURRENT_STATE.md`** - Current repo status and doc routing
+- **`docs/systemd-services/README.md`** - Current service setup
+- **`QUICK_START.md`** - This file (historical quick reference)
 - **`docs/`** - Official FreqTrade documentation
 
 ---

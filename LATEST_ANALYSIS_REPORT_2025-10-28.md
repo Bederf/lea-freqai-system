@@ -434,7 +434,7 @@ grep -n "rsi" user_data/strategies/LeaFreqAIStrategy.py
 
 **Action 2: Restart Bot 1 with New Config**
 ```bash
-sudo systemctl restart freqtrade-bot1
+sudo systemctl restart freqtrade-lea
 # or
 pkill -f freqtrade && ./start_lea_bot.sh
 ```
@@ -578,7 +578,7 @@ Stop-Loss Ratio:          5% (appropriate for crypto)
 pkill -f freqtrade
 
 # Restart Bot 1
-sudo systemctl restart freqtrade-bot1
+sudo systemctl restart freqtrade-lea
 
 # Check bot PIDs
 ps aux | grep freqtrade
@@ -618,4 +618,3 @@ tail -20 freqtrade.log | grep Trade
 ---
 
 **Next Update:** 2025-10-29 (if market moves significantly)
-

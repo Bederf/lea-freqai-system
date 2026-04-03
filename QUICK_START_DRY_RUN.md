@@ -1,5 +1,7 @@
 # Quick Start Guide - Freqtrade Dry Run
 
+> Historical note: this file documents an older single-service dry-run flow. Current operations use per-bot `tradesv3_*.sqlite` databases and the service/scripts documented in `CURRENT_STATE.md`.
+
 ## ⚡ 3-Step Setup (5 minutes)
 
 ### Step 1: Install Systemctl Service

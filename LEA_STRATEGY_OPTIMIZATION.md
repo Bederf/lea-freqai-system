@@ -1,5 +1,7 @@
 # LEA FreqAI Strategy Optimization Report
 
+> Historical note: this report captures a 2025 LEA optimization cycle. It is not a current deployment guide, and its parameters may differ from the current live or paper-trading bot configuration. Use `CURRENT_STATE.md`, `BOT_RESEARCH_WORKFLOW.md`, and `docs/systemd-services/README.md` for current operations.
+
 **Date:** 2025-10-20  
 **Status:** ✅ OPTIMIZED - Strategy Beating Market by 12.44%
 
@@ -715,4 +717,3 @@ The LEA FreqAI strategy is **production-ready** and **optimized**. Through syste
 **Testing Period:** Sept 1 - Oct 20, 2025 (49 days)  
 **Test Environment:** Backtesting on historical data  
 **Production Status:** ✅ Ready for Live Trading
-

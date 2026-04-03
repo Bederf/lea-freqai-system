@@ -1,5 +1,7 @@
 # Stoploss Strategy Testing Results
 
+> Historical note: this document describes 2025 LEA stoploss tests for an earlier strategy version. It is useful context, but not current source of truth for the active multi-bot deployment or live LEA parameters.
+
 **Date:** 2025-10-20  
 **Objective:** Find optimal stoploss configuration for LEA FreqAI strategy  
 **Test Period:** Sept 1 - Oct 20, 2025 (49 days, bear market -23.19%)
@@ -763,4 +765,3 @@ After extensive testing of 7+ different stoploss strategies:
 
 **Last Updated:** 2025-10-20  
 **Next Steps:** See `LEA_STRATEGY_OPTIMIZATION.md` for deployment guide
-

@@ -1,5 +1,7 @@
 # LEA FreqAI Trading Bot - Complete Guide
 
+> Historical note: this document describes a 2025 LEA strategy iteration and older deployment assumptions. It is useful background, but it is not the current source of truth for the repo's active multi-bot setup. Start with `CURRENT_STATE.md`, `DAILY_SCORECARD.md`, `BOT_RESEARCH_WORKFLOW.md`, and `docs/systemd-services/README.md` for current operations.
+
 **Version:** 1.3 (Optimized)  
 **Last Updated:** 2025-10-20  
 **Status:** 🟢 Production Ready
@@ -87,10 +89,10 @@ freqtrade trade \
 
 **New User?** Read in this order:
 
-1. **`STRATEGY_SUMMARY.md`** - Quick 1-page overview
-2. **`QUICK_START.md`** - How to run the bot
-3. **`LEA_STRATEGY_OPTIMIZATION.md`** - Full optimization report
-4. **`STOPLOSS_STRATEGY_TESTING.md`** - Stoploss testing details
+1. **`CURRENT_STATE.md`** - Current doc routing and repo status
+2. **`DAILY_SCORECARD.md`** - Current daily operating view
+3. **`BOT_RESEARCH_WORKFLOW.md`** - Current research workflow
+4. **`LEA_STRATEGY_OPTIMIZATION.md`** - Historical optimization report for this LEA iteration
 
 ### Deep Dive 📚
 
@@ -98,7 +100,7 @@ freqtrade trade \
 
 - **`LEA_PROGRESS.md`** - Complete implementation history
 - **`CHANGELOG_STRATEGY.md`** - Every code change documented
-- **`LEA_STARTUP_FIXED.md`** - Initial setup issues (historical)
+- **`STARTUP_VERIFIED.md`** - Historical startup verification notes
 
 ### Reference 🔍
 
@@ -821,4 +823,3 @@ Your LEA FreqAI bot is **production-ready** with:
 **Maintained By:** LEA Development Team  
 **License:** Same as FreqTrade (GPLv3)  
 **Support:** See documentation files
-

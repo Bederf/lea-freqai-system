@@ -1,10 +1,17 @@
 # Freqtrade Deployment Status - November 6, 2025
 
-## Executive Summary
+## ⚠️ ARCHIVED DOCUMENT - See Current Status Below
+
+**Status Note:** This document reflects November 2025 planning phase. The bots are now **LIVE in production** as of March 2026.
+
+**Current Status (March 18, 2026):** ✅ All three bots running in production
+- **See:** [PRODUCTION_STATUS_2026-03-18.md](./PRODUCTION_STATUS_2026-03-18.md) for current status
+
+---
+
+## Executive Summary (November 2025 - Historical)
 
 All three trading strategies have been integrated with Binance research data for backtesting/hyperopt optimization. Two strategies are **ready for deployment**, one has been **archived** pending further analysis.
-
-**Note**: Per user request, this is **backtesting/hyperopt only** - NOT for live trading yet. The bot runs remotely on Raspberry Pi for live trading.
 
 ---
 

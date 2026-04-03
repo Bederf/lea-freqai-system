@@ -1,5 +1,7 @@
 # 🚀 START HERE - Dry Run Setup Guide
 
+> Historical note: this file reflects an older single-service dry-run setup and older database references. For the current repo layout, start with `CURRENT_STATE.md`, `DAILY_SCORECARD.md`, `BOT_RESEARCH_WORKFLOW.md`, and `docs/systemd-services/README.md`.
+
 ## You Have 3 Simple Steps to Start Trading Bot
 
 ### Step 1: Setup Telegram Alerts (5 min)

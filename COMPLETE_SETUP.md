@@ -1,5 +1,7 @@
 # LEA FreqAI System - Complete Setup Guide
 
+> Historical note: this setup guide targets an earlier device-specific LEA deployment path. It is useful for background, but it is not the current source of truth for the repo's active multi-bot setup.
+
 This guide will help you set up the LEA FreqAI trading system from scratch on a fresh Banana Pi (or similar ARM64 device) with Armbian/Debian.
 
 ## System Requirements
