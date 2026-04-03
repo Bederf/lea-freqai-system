@@ -1,161 +1,253 @@
 """
-Contextual Bandit Meta-Strategy
-Selects between LeaFreqAI and HybridAI strategies based on market context
+Integrated Contextual Bandit Meta-Strategy for Freqtrade
 
-This is a meta-strategy that:
-1. Observes market context (volatility, trend, time)
-2. Selects the best strategy for that context (epsilon-greedy)
-3. Uses the selected strategy's entry/exit logic
-4. Logs decisions for offline learning
+Combines:
+- Bandit Q-value strategy selection (LEA vs Hybrid/FinAgent)
+- Quantile-filtered ML entry (top 20% predictions only)
+- Pivot-based entry filters (bullish bias, resistance avoidance)
+- ATR-based dynamic stop-loss
+- Time-horizon exits (60 min LEA, 90 min Hybrid/FinAgent)
+- Pivot take-profit (R1 for LEA, R2 for Hybrid)
+- Partial take-profit via early ROI tiers
 
-Run meta_learner.py daily to update Q-values from trade outcomes.
+Backtest: row-wise deterministic exploitation (no epsilon noise)
+Live/dry-run: epsilon-greedy exploration with Q-values
 """
+
 import json
 import logging
-import numpy as np
-from pathlib import Path
+from datetime import datetime, timedelta
 from functools import reduce
-from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
+import numpy as np
 import pandas as pd
 import talib.abstract as ta
 from pandas import DataFrame
 
+from freqtrade.enums import RunMode
+from freqtrade.persistence import Trade
 from freqtrade.strategy import IStrategy
 
 logger = logging.getLogger(__name__)
 
 
 class BanditMetaStrategy(IStrategy):
-    """
-    Contextual bandit strategy selector
-
-    Chooses between two strategies based on context:
-    - LeaFreqAIStrategy: Conservative (tight stops, quick exits)
-    - HybridAIStrategy: Aggressive (wider stops, patient exits)
-
-    Context dimensions:
-    - Market volatility (low/med/high)
-    - Pair trend (down/flat/up)
-    - Time of day (morning/day/evening)
-
-    Selection: Epsilon-greedy (90% exploit best Q-value, 10% explore)
-    """
-
-    # Strategy metadata
     INTERFACE_VERSION = 3
     can_short = False
 
-    # Timeframe (matches both sub-strategies)
     timeframe = "5m"
-
-    # Startup candles
     startup_candle_count = 200
+    process_only_new_candles = True
 
-    # Risk parameters (will be overridden by selected strategy logic)
-    # Using LEA's conservative defaults as base
+    # =====================================================================
+    # ML THRESHOLDS & QUANTILES
+    # =====================================================================
+    lea_entry_threshold = 0.01
+    hybrid_entry_threshold = 0.01
+    ml_quantile_threshold = 0.80  # Top 20% of predictions only
+
+    # =====================================================================
+    # ATR STOP-LOSS
+    # =====================================================================
+    atr_period = 14
+    atr_multiplier = 1.5  # Stop distance = ATR × multiplier
+
+    # =====================================================================
+    # TIME HORIZONS
+    # =====================================================================
+    lea_max_hold_minutes = 60
+    hybrid_max_hold_minutes = 90
+
+    # =====================================================================
+    # PARTIAL TAKE-PROFIT (via early ROI tiers)
+    # =====================================================================
+    # First tier takes 50% off at 1% profit, second tier takes remaining at R1/R2 or time
+    # partial_tp_pct = 0.5 is informational; actual partial TP is handled by minimal_roi
+    partial_tp_enabled = True
+    partial_tp_profit = 0.01  # First partial exit at this profit
+
+    # =====================================================================
+    # ROI & STOPLOSS
+    # =====================================================================
+    # Partial TP: first tier takes ~50% at 1%, second tier runs until pivot/time
     minimal_roi = {
-        "0": 0.015,
-        "30": 0.01,
-        "60": 0.008,
-        "120": 0.005
+        "0": 0.015,   # Immediate profit - aggressive entry
+        "30": 0.010,  # 1% after 30 min
+        "60": 0.008,  # 0.8% after 1 hour (partial exit opportunity)
+        "120": 0.005, # 0.5% after 2 hours
     }
 
-    stoploss = -0.05
-    trailing_stop = True
-    trailing_stop_positive = 0.005
-    trailing_stop_positive_offset = 0.01
+    stoploss = -0.20
+    trailing_stop = False
+    use_custom_stoploss = True  # Enable for ATR-based dynamic stop
 
-    # Exit settings
     use_exit_signal = True
     exit_profit_only = False
     ignore_roi_if_entry_signal = False
 
-    # Process only new candles
-    process_only_new_candles = True
-
-    # Order types
     order_types = {
         "entry": "limit",
         "exit": "limit",
         "stoploss": "market",
-        "stoploss_on_exchange": False
+        "stoploss_on_exchange": False,
     }
 
     order_time_in_force = {
         "entry": "GTC",
-        "exit": "GTC"
+        "exit": "GTC",
     }
 
     def __init__(self, config: dict):
         super().__init__(config)
 
-        # Load bandit selector
         self.selector_path = Path("user_data/bandit_selector.json")
+        self.selection_log_path = Path("user_data/bandit_selections.jsonl")
         self.load_selector()
 
-        # Track strategy selection per pair (for exit logic)
-        self.pair_strategy_map = {}
+        # Store per-pair ATR values for dynamic stop-loss
+        self._atr_cache: dict[str, float] = {}
 
-        logger.info("BanditMetaStrategy initialized")
-        logger.info(f"Selector loaded: {len(self.selector.get('contexts', {}))} contexts")
+        logger.info("BanditMetaStrategy initialized (integrated version)")
+        logger.info(
+            "Selector loaded with %s contexts",
+            len(self.selector.get("contexts", {})),
+        )
 
-    def load_selector(self):
-        """Load bandit selection table or initialize with defaults"""
+    # =====================================================================
+    # SELECTOR LOADING / LOGGING
+    # =====================================================================
+
+    def load_selector(self) -> None:
+        """Load contextual bandit selector table or initialize defaults."""
         if self.selector_path.exists():
-            with open(self.selector_path) as f:
-                self.selector = json.load(f)
-                logger.info(f"Loaded selector from {self.selector_path}")
+            try:
+                with open(self.selector_path, "r", encoding="utf-8") as f:
+                    self.selector = json.load(f)
+                logger.info("Loaded selector from %s", self.selector_path)
+            except Exception as e:
+                logger.error("Failed to load selector: %s", e)
+                self.selector = self._default_selector()
         else:
-            # Initialize with uniform priors (no knowledge yet)
-            self.selector = {
-                "contexts": {},
-                "epsilon": 0.1,  # 10% exploration
-                "alpha": 0.1,    # Learning rate (not used in strategy, only meta_learner)
-                "last_updated": None,
-                "total_trades_processed": 0
-            }
-            logger.warning(f"No selector found at {self.selector_path}, initialized with defaults")
+            self.selector = self._default_selector()
+            logger.warning("No selector found at %s, using defaults", self.selector_path)
             logger.warning("Run trades and meta_learner.py to build Q-values")
 
-    def get_context(self, dataframe: DataFrame, pair: str) -> str:
-        """
-        Extract current market context
+    def _default_selector(self) -> dict:
+        return {
+            "contexts": {},
+            "epsilon": 0.1,
+            "alpha": 0.1,
+            "last_updated": None,
+            "total_trades_processed": 0,
+        }
 
-        Returns context string like: "vol_low_trend_up_hour_day"
-        """
+    def log_selection(self, pair: str, context: str, strategy: str, entry_tag: str) -> None:
+        """Log only confirmed trade selections."""
+        entry = {
+            "timestamp": datetime.utcnow().isoformat(),
+            "pair": pair,
+            "context": context,
+            "strategy": strategy,
+            "entry_tag": entry_tag,
+        }
+        try:
+            with open(self.selection_log_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps(entry) + "\n")
+        except Exception as e:
+            logger.error("Failed to log selection: %s", e)
+
+    def log_event(self, event_type: str, payload: dict) -> None:
+        """Structured observability log for signal/confirm/exit lifecycle events."""
+        entry = {
+            "timestamp": datetime.utcnow().isoformat(),
+            "event_type": event_type,
+            **payload,
+        }
+        try:
+            with open(self.selection_log_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps(entry) + "\n")
+        except Exception as e:
+            logger.error("Failed to log event '%s': %s", event_type, e)
+
+    @staticmethod
+    def _safe_float(value) -> Optional[float]:
+        """Best-effort float conversion for telemetry payloads."""
+        if pd.isna(value):
+            return None
+        try:
+            return float(value)
+        except Exception:
+            return None
+
+    # =====================================================================
+    # PREDICTION COLUMN HELPERS
+    # =====================================================================
+
+    def _get_prediction_column(self, dataframe: DataFrame) -> Optional[str]:
+        """Resolve the FreqAI prediction column."""
+        candidates = ["&-target", "prediction", "predicted_return", "target"]
+        for col in candidates:
+            if col in dataframe.columns:
+                return col
+        return None
+
+    def _prediction_available(self, dataframe: DataFrame) -> bool:
+        pred_col = self._get_prediction_column(dataframe)
+        return pred_col is not None
+
+    # =====================================================================
+    # RUN MODE HELPERS
+    # =====================================================================
+
+    def _use_bandit_exploration(self) -> bool:
+        """Epsilon-greedy exploration only in live and dry-run."""
+        rm = self.config.get("runmode")
+        return rm in (RunMode.LIVE, RunMode.DRY_RUN)
+
+    def _use_rowwise_bandit(self) -> bool:
+        """Per-candle context + deterministic arm in backtest and hyperopt."""
+        rm = self.config.get("runmode")
+        return rm in (RunMode.BACKTEST, RunMode.HYPEROPT)
+
+    # =====================================================================
+    # CONTEXT / BANDIT SELECTION
+    # =====================================================================
+
+    def get_context(self, dataframe: DataFrame, pair: str) -> str:
+        """Extract current context from the latest candle."""
         if len(dataframe) < 50:
-            return "vol_med_trend_flat_hour_day"  # Default for insufficient data
+            return "vol_med_trend_flat_hour_day"
 
         last = dataframe.iloc[-1]
 
-        # 1. Market volatility (from BTC correlation feature)
-        if "%market_vol" in dataframe.columns:
+        # 1. Volatility regime
+        if "%market_vol" in dataframe.columns and pd.notna(last.get("%market_vol", np.nan)):
             market_vol = last["%market_vol"]
-            if pd.notna(market_vol):
-                if market_vol < 0.02:
-                    vol_regime = "low"
-                elif market_vol > 0.05:
-                    vol_regime = "high"
-                else:
-                    vol_regime = "med"
+            if market_vol < 0.02:
+                vol_regime = "low"
+            elif market_vol > 0.05:
+                vol_regime = "high"
             else:
                 vol_regime = "med"
         else:
-            # Fallback: use pair's own volatility
             returns = dataframe["close"].pct_change()
             vol = returns.rolling(48).std().iloc[-1]
-            if pd.notna(vol):
-                vol_regime = "low" if vol < 0.02 else ("high" if vol > 0.05 else "med")
+            if pd.isna(vol):
+                vol_regime = "med"
+            elif vol < 0.02:
+                vol_regime = "low"
+            elif vol > 0.05:
+                vol_regime = "high"
             else:
                 vol_regime = "med"
 
-        # 2. Pair trend strength
-        if "ema_50" in dataframe.columns:
+        # 2. Trend regime
+        if "ema_50" in dataframe.columns and pd.notna(last.get("ema_50", np.nan)):
             ema50 = last["ema_50"]
             close = last["close"]
-            if pd.notna(ema50) and ema50 > 0:
+            if ema50 > 0:
                 trend = (close - ema50) / ema50
                 if trend < -0.02:
                     trend_regime = "down"
@@ -170,11 +262,10 @@ class BanditMetaStrategy(IStrategy):
 
         # 3. Time of day
         try:
-            if hasattr(last.name, 'hour'):
-                hour = last.name.hour
+            if hasattr(last.name, "hour"):
+                hour = int(last.name.hour)
             else:
-                hour = datetime.now().hour
-
+                hour = datetime.utcnow().hour
             if hour < 8:
                 time_regime = "morning"
             elif hour < 16:
@@ -184,121 +275,159 @@ class BanditMetaStrategy(IStrategy):
         except Exception:
             time_regime = "day"
 
-        # Construct context key
-        context = f"vol_{vol_regime}_trend_{trend_regime}_hour_{time_regime}"
-        return context
+        return f"vol_{vol_regime}_trend_{trend_regime}_hour_{time_regime}"
+
+    def _get_context_series(self, dataframe: DataFrame) -> pd.Series:
+        """Per-row context strings for backtest/hyperopt."""
+        default_ctx = "vol_med_trend_flat_hour_day"
+        n = len(dataframe)
+        idx = dataframe.index
+        if n < 50:
+            return pd.Series([default_ctx] * n, index=idx)
+
+        # Volatility regime
+        returns = dataframe["close"].pct_change()
+        roll_vol = returns.rolling(48).std()
+        if "%market_vol" in dataframe.columns:
+            mv = dataframe["%market_vol"]
+            v = mv.where(mv.notna(), roll_vol)
+        else:
+            v = roll_vol
+        vol_regime = np.where(
+            pd.isna(v), "med",
+            np.where(v < 0.02, "low", np.where(v > 0.05, "high", "med")),
+        )
+
+        # Trend regime
+        if "ema_50" in dataframe.columns:
+            ema50 = dataframe["ema_50"]
+            close = dataframe["close"]
+            denom = ema50.replace(0, np.nan)
+            trend_pct = (close - ema50) / denom
+            trend_regime = np.where(
+                ema50 <= 0, "flat",
+                np.where(
+                    pd.isna(trend_pct), "flat",
+                    np.where(
+                        trend_pct < -0.02, "down",
+                        np.where(trend_pct > 0.02, "up", "flat"),
+                    ),
+                ),
+            )
+        else:
+            trend_regime = np.full(n, "flat", dtype=object)
+
+        # Time of day
+        try:
+            if hasattr(idx, "hour"):
+                hours = idx.hour.to_numpy()
+            else:
+                h = datetime.utcnow().hour
+                hours = np.full(n, h, dtype=int)
+            time_regime = np.where(
+                hours < 8, "morning",
+                np.where(hours < 16, "day", "evening"),
+            )
+        except Exception:
+            time_regime = np.full(n, "day", dtype=object)
+
+        ctx = (
+            "vol_"
+            + pd.Series(vol_regime, index=idx).astype(str)
+            + "_trend_"
+            + pd.Series(trend_regime, index=idx).astype(str)
+            + "_hour_"
+            + pd.Series(time_regime, index=idx).astype(str)
+        )
+        return ctx
+
+    def _map_context_to_strategy_deterministic(self, context: str) -> str:
+        """Exploit Q-values only; unknown context defaults to LEA."""
+        if context not in self.selector.get("contexts", {}):
+            return "lea"
+        ctx_data = self.selector["contexts"][context]
+        lea_q = ctx_data.get("LeaFreqAIStrategy", {}).get("q_value", 0.0)
+        hybrid_q = ctx_data.get("HybridAIStrategy", {}).get("q_value", 0.0)
+        return "lea" if lea_q >= hybrid_q else "hybrid"
+
+    def _strategy_series_from_contexts(self, context_series: pd.Series) -> pd.Series:
+        """Map each row's context to lea/hybrid using Q-values."""
+        uniq = pd.unique(context_series)
+        mapping = {c: self._map_context_to_strategy_deterministic(str(c)) for c in uniq}
+        return context_series.map(mapping)
 
     def select_strategy(self, context: str, pair: str) -> str:
-        """
-        Epsilon-greedy strategy selection
+        """Epsilon-greedy exploration (live/dry-run); deterministic exploit otherwise."""
+        epsilon = float(self.selector.get("epsilon", 0.1))
 
-        Returns:
-            "lea" or "hybrid"
-        """
-        epsilon = self.selector.get("epsilon", 0.1)
-
-        # Exploration: random choice (10% of time)
-        if np.random.random() < epsilon:
+        if self._use_bandit_exploration() and np.random.random() < epsilon:
             selected = np.random.choice(["lea", "hybrid"])
-            logger.debug(f"[{pair}] EXPLORE: Selected {selected} (ε={epsilon:.2f})")
+            logger.debug("[%s] EXPLORE selected=%s epsilon=%.3f", pair, selected, epsilon)
             return selected
 
-        # Exploitation: choose best Q-value
-        if context not in self.selector["contexts"]:
-            # Unknown context: default to conservative LEA
-            logger.debug(f"[{pair}] Unknown context '{context}', defaulting to LEA")
+        if context not in self.selector.get("contexts", {}):
+            logger.debug("[%s] Unknown context '%s', defaulting to LEA", pair, context)
             return "lea"
 
         ctx_data = self.selector["contexts"][context]
-
-        # Get Q-values for each strategy
         lea_q = ctx_data.get("LeaFreqAIStrategy", {}).get("q_value", 0.0)
         hybrid_q = ctx_data.get("HybridAIStrategy", {}).get("q_value", 0.0)
 
-        # Select best
         if lea_q >= hybrid_q:
-            selected = "lea"
-            logger.debug(f"[{pair}] EXPLOIT: LEA (Q={lea_q:.4f}) > Hybrid (Q={hybrid_q:.4f})")
-        else:
-            selected = "hybrid"
-            logger.debug(f"[{pair}] EXPLOIT: Hybrid (Q={hybrid_q:.4f}) > LEA (Q={lea_q:.4f})")
+            logger.debug("[%s] EXPLOIT LEA q=%.5f hybrid_q=%.5f", pair, lea_q, hybrid_q)
+            return "lea"
 
-        return selected
+        logger.debug("[%s] EXPLOIT HYBRID q=%.5f lea_q=%.5f", pair, hybrid_q, lea_q)
+        return "hybrid"
 
-    def log_selection(self, pair: str, context: str, strategy: str):
-        """
-        Log strategy selection for offline learning
-
-        Creates a JSONL file with selections that meta_learner.py can use
-        to correlate with trade outcomes.
-        """
-        log_file = Path("user_data/bandit_selections.jsonl")
-
-        entry = {
-            "timestamp": datetime.now().isoformat(),
-            "pair": pair,
-            "context": context,
-            "strategy": strategy
-        }
-
-        try:
-            with open(log_file, "a") as f:
-                f.write(json.dumps(entry) + "\n")
-        except Exception as e:
-            logger.error(f"Failed to log selection: {e}")
-
-    # ========================================================================
-    # FREQAI FEATURE ENGINEERING (same as LeaFreqAIStrategy)
-    # ========================================================================
+    # =====================================================================
+    # FREQAI FEATURE ENGINEERING
+    # =====================================================================
 
     def feature_engineering_expand_all(
         self, dataframe: DataFrame, period: int, metadata: dict, **kwargs
     ) -> DataFrame:
-        """Create stationary features for FreqAI"""
-        # Price returns (stationary)
-        dataframe[f"%ret_1"] = dataframe["close"].pct_change(1)
-        dataframe[f"%ret_3"] = dataframe["close"].pct_change(3)
-        dataframe[f"%ret_12"] = dataframe["close"].pct_change(12)
+        dataframe["%ret_1"] = dataframe["close"].pct_change(1)
+        dataframe["%ret_3"] = dataframe["close"].pct_change(3)
+        dataframe["%ret_12"] = dataframe["close"].pct_change(12)
 
-        # Volatility (ATR-based, relative)
         dataframe["atr14"] = ta.ATR(dataframe, timeperiod=14)
-        dataframe[f"%atr14_rel"] = dataframe["atr14"] / dataframe["close"]
+        dataframe["%atr14_rel"] = dataframe["atr14"] / dataframe["close"]
 
-        # Range (stationary)
-        dataframe[f"%rng_24"] = (
+        dataframe["%rng_24"] = (
             dataframe["high"].rolling(24).max() - dataframe["low"].rolling(24).min()
         ) / dataframe["close"]
 
-        # Z-score (mean reversion)
         returns = dataframe["close"].pct_change()
-        dataframe[f"%z_48"] = (returns - returns.rolling(48).mean()) / returns.rolling(48).std()
+        dataframe["%z_48"] = (
+            (returns - returns.rolling(48).mean()) / returns.rolling(48).std()
+        )
 
-        # Volume indicators
-        dataframe[f"%vol_z_48"] = (
+        dataframe["%vol_z_48"] = (
             (dataframe["volume"] - dataframe["volume"].rolling(48).mean())
             / dataframe["volume"].rolling(48).std()
         )
 
-        # RSI
         dataframe["rsi"] = ta.RSI(dataframe, timeperiod=14)
 
-        # MACD
         macd = ta.MACD(dataframe)
         dataframe["macd"] = macd["macd"]
         dataframe["macdsignal"] = macd["macdsignal"]
         dataframe["macdhist"] = macd["macdhist"]
 
-        # Bollinger Bands
         from technical import qtpylib
-        bollinger = qtpylib.bollinger_bands(qtpylib.typical_price(dataframe), window=20, stds=2)
+
+        bollinger = qtpylib.bollinger_bands(
+            qtpylib.typical_price(dataframe), window=20, stds=2
+        )
         dataframe["bb_lowerband"] = bollinger["lower"]
         dataframe["bb_middleband"] = bollinger["mid"]
         dataframe["bb_upperband"] = bollinger["upper"]
         dataframe["%bb_width"] = (
-            (dataframe["bb_upperband"] - dataframe["bb_lowerband"]) / dataframe["bb_middleband"]
+            (dataframe["bb_upperband"] - dataframe["bb_lowerband"])
+            / dataframe["bb_middleband"]
         )
 
-        # EMAs for trend
         dataframe["ema_50"] = ta.EMA(dataframe, timeperiod=50)
         dataframe["ema_200"] = ta.EMA(dataframe, timeperiod=200)
 
@@ -307,228 +436,328 @@ class BanditMetaStrategy(IStrategy):
     def feature_engineering_expand_basic(
         self, dataframe: DataFrame, metadata: dict, **kwargs
     ) -> DataFrame:
-        """Basic feature engineering for main timeframe"""
-        dataframe = self.feature_engineering_expand_all(dataframe, period=1, metadata=metadata)
-        return dataframe
+        return self.feature_engineering_expand_all(
+            dataframe, period=1, metadata=metadata
+        )
 
     def feature_engineering_standard(
         self, dataframe: DataFrame, metadata: dict, **kwargs
     ) -> DataFrame:
-        """Market regime features (BTC correlation)"""
-        # Only add BTC features if this is NOT the BTC pair itself
         if metadata.get("pair") != "BTC/USDT" and self.dp:
-            btc_dataframe = self.dp.get_pair_dataframe(pair="BTC/USDT", timeframe=self.timeframe)
+            btc_dataframe = self.dp.get_pair_dataframe(
+                pair="BTC/USDT",
+                timeframe=self.timeframe,
+            )
+
             if not btc_dataframe.empty and len(btc_dataframe) > 50:
-                # BTC trend strength
                 btc_ema = ta.EMA(btc_dataframe["close"], timeperiod=50)
                 btc_trend = (btc_dataframe["close"] - btc_ema) / btc_ema
-
-                # Market volatility
                 btc_vol = btc_dataframe["close"].pct_change().rolling(48).std()
 
-                # Add to dataframe with proper alignment
-                dataframe["%btc_trend"] = btc_trend.reindex(dataframe.index, method='ffill')
-                dataframe["%market_vol"] = btc_vol.reindex(dataframe.index, method='ffill')
+                dataframe["%btc_trend"] = btc_trend.reindex(
+                    dataframe.index, method="ffill"
+                )
+                dataframe["%market_vol"] = btc_vol.reindex(
+                    dataframe.index, method="ffill"
+                )
+            else:
+                dataframe["%btc_trend"] = 0.0
+                dataframe["%market_vol"] = dataframe["close"].pct_change().rolling(48).std()
         else:
-            # For BTC pair or if data unavailable
             dataframe["%btc_trend"] = 0.0
             dataframe["%market_vol"] = dataframe["close"].pct_change().rolling(48).std()
 
         return dataframe
 
     def set_freqai_targets(self, dataframe: DataFrame, metadata: dict, **kwargs) -> DataFrame:
-        """
-        Define prediction target
-        Target: Future return over next 12 candles (1 hour at 5m)
-        """
         dataframe["&-target"] = dataframe["close"].shift(-12).pct_change(12)
         return dataframe
 
-    # ========================================================================
-    # INDICATOR POPULATION (FreqAI predictions)
-    # ========================================================================
+    # =====================================================================
+    # INDICATORS
+    # =====================================================================
 
     def populate_indicators(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
-        """
-        Populate FreqAI predictions
-        Both strategies use the same predictions, they differ only in entry/exit logic
-        """
-        # Run FreqAI
         dataframe = self.freqai.start(dataframe, metadata, self)
 
-        # Add indicators needed for entry/exit logic
         dataframe["rsi"] = ta.RSI(dataframe, timeperiod=14)
         dataframe["ema_50"] = ta.EMA(dataframe, timeperiod=50)
         dataframe["ema_200"] = ta.EMA(dataframe, timeperiod=200)
 
-        # MACD (for Hybrid strategy)
         macd = ta.MACD(dataframe)
         dataframe["macd"] = macd["macd"]
         dataframe["macdsignal"] = macd["macdsignal"]
 
+        dataframe["vol_mean_20"] = dataframe["volume"].rolling(20).mean()
+
+        # === ATR (for dynamic stop-loss) ===
+        dataframe["atr"] = ta.ATR(dataframe, timeperiod=self.atr_period)
+
+        # === Prediction quantile (top X% only) ===
+        pred_col = self._get_prediction_column(dataframe)
+        if pred_col:
+            dataframe["pred_quantile"] = dataframe[pred_col].rank(pct=True)
+
+        # === Pivot Points (previous candle — no lookahead) ===
+        dataframe["pivot"] = (
+            dataframe["high"].shift(1)
+            + dataframe["low"].shift(1)
+            + dataframe["close"].shift(1)
+        ) / 3
+
+        dataframe["r1"] = (2 * dataframe["pivot"]) - dataframe["low"].shift(1)
+        dataframe["s1"] = (2 * dataframe["pivot"]) - dataframe["high"].shift(1)
+
+        dataframe["r2"] = dataframe["pivot"] + (
+            dataframe["high"].shift(1) - dataframe["low"].shift(1)
+        )
+        dataframe["s2"] = dataframe["pivot"] - (
+            dataframe["high"].shift(1) - dataframe["low"].shift(1)
+        )
+
         return dataframe
 
-    # ========================================================================
-    # ENTRY LOGIC (selects strategy, then applies its logic)
-    # ========================================================================
+    # =====================================================================
+    # ENTRY LOGIC
+    # =====================================================================
 
     def populate_entry_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
-        """
-        Select strategy based on context, then apply its entry logic
-        """
         pair = metadata["pair"]
+        dataframe["enter_long"] = 0
+        dataframe["enter_tag"] = None
 
-        # Check if predictions available
-        if "&-target" not in dataframe.columns:
-            logger.warning(f"[{pair}] No FreqAI predictions, no entries")
-            dataframe["enter_long"] = 0
+        pred_col = self._get_prediction_column(dataframe)
+        if pred_col is None:
+            logger.warning("[%s] No FreqAI prediction column found, no entries", pair)
             return dataframe
 
-        # Extract context
-        context = self.get_context(dataframe, pair)
+        if self._use_rowwise_bandit():
+            return self._populate_entry_trend_rowwise(dataframe, metadata, pair, pred_col)
 
-        # Select strategy (epsilon-greedy)
+        context = self.get_context(dataframe, pair)
         selected = self.select_strategy(context, pair)
 
-        # Store selection for exit logic
-        self.pair_strategy_map[pair] = selected
-
-        # Log selection
-        self.log_selection(pair, context, selected)
-
-        # Apply selected strategy's entry logic
         if selected == "lea":
-            dataframe = self._populate_entry_lea(dataframe, metadata, context)
+            dataframe = self._populate_entry_lea(dataframe, metadata, context, pred_col)
         else:
-            dataframe = self._populate_entry_hybrid(dataframe, metadata, context)
+            dataframe = self._populate_entry_hybrid(dataframe, metadata, context, pred_col)
 
+        return dataframe
+
+    def _quantile_filter(self, dataframe: DataFrame, pred_col: str) -> pd.Series:
+        """Return mask for top X% predictions (ml_quantile_threshold)."""
+        if "pred_quantile" in dataframe.columns:
+            return dataframe["pred_quantile"] >= self.ml_quantile_threshold
+        # Fallback: use relative ranking
+        return dataframe[pred_col] >= dataframe[pred_col].quantile(self.ml_quantile_threshold)
+
+    def _lea_entry_mask(self, dataframe: DataFrame, pred_col: str) -> pd.Series:
+        conditions = [
+            dataframe[pred_col] > self.lea_entry_threshold,
+            self._quantile_filter(dataframe, pred_col),  # Top 20% predictions only
+            dataframe["volume"] > 0,
+            dataframe["close"] > dataframe["pivot"],      # Bullish bias
+            dataframe["close"] < dataframe["r1"],         # Avoid resistance
+        ]
+        if "do_predict" in dataframe.columns:
+            conditions.append(dataframe["do_predict"] == 1)
+        return reduce(lambda x, y: x & y, conditions)
+
+    def _hybrid_entry_mask(self, dataframe: DataFrame, pred_col: str) -> pd.Series:
+        conditions = [
+            dataframe[pred_col] > self.hybrid_entry_threshold,
+            self._quantile_filter(dataframe, pred_col),  # Top 20% predictions only
+            dataframe["ema_50"] > dataframe["ema_200"],
+            dataframe["rsi"] < 70,
+            dataframe["macd"] > dataframe["macdsignal"],
+            dataframe["volume"] > 0,
+            dataframe["close"] > dataframe["pivot"],      # Bullish bias only
+        ]
+        if "%btc_trend" in dataframe.columns:
+            conditions.append(dataframe["%btc_trend"] > -0.05)
+        return reduce(lambda x, y: x & y, conditions)
+
+    def _populate_entry_trend_rowwise(
+        self,
+        dataframe: DataFrame,
+        metadata: dict,
+        pair: str,
+        pred_col: str,
+    ) -> DataFrame:
+        """Each row: context from that candle, arm from Q-values only, then that arm's rules."""
+        context_series = self._get_context_series(dataframe)
+        selected_series = self._strategy_series_from_contexts(context_series)
+        mask_lea = self._lea_entry_mask(dataframe, pred_col) & (selected_series == "lea")
+        mask_hybrid = self._hybrid_entry_mask(dataframe, pred_col) & (
+            selected_series == "hybrid"
+        )
+
+        dataframe.loc[mask_lea, "enter_long"] = 1
+        dataframe.loc[mask_lea, "enter_tag"] = "lea_bandit_ctx_" + context_series[mask_lea].astype(
+            str
+        )
+
+        dataframe.loc[mask_hybrid, "enter_long"] = 1
+        dataframe.loc[mask_hybrid, "enter_tag"] = (
+            "hybrid_bandit_ctx_" + context_series[mask_hybrid].astype(str)
+        )
+
+        logger.debug(
+            "[%s] rowwise bandit: lea_rows=%s hybrid_rows=%s",
+            pair,
+            int(mask_lea.sum()),
+            int(mask_hybrid.sum()),
+        )
         return dataframe
 
     def _populate_entry_lea(
-        self, dataframe: DataFrame, metadata: dict, context: str
+        self,
+        dataframe: DataFrame,
+        metadata: dict,
+        context: str,
+        pred_col: str,
     ) -> DataFrame:
-        """
-        LEA strategy entry logic
-        Conservative: tight filters, high confidence threshold
-        """
-        conditions = []
-
-        # ML prediction must be positive (0.5% threshold)
-        conditions.append(dataframe["&-target"] > 0.005)
-
-        # DI filter (if available)
-        if "do_predict" in dataframe.columns:
-            conditions.append(dataframe["do_predict"] == 1)
-
-        # Trend: price above 50 EMA
-        conditions.append(dataframe["close"] > dataframe["ema_50"])
-
-        # RSI: avoid overbought
-        conditions.append(dataframe["rsi"] < 70)
-
-        # Volume: above average
-        conditions.append(dataframe["volume"] > dataframe["volume"].rolling(20).mean())
-
-        # Combine
-        if conditions:
-            dataframe.loc[reduce(lambda x, y: x & y, conditions), "enter_long"] = 1
-
-        # Tag with strategy and context for tracking
-        dataframe["enter_tag"] = f"lea_bandit_ctx_{context}"
-
+        mask = self._lea_entry_mask(dataframe, pred_col)
+        tag = f"lea_bandit_ctx_{context}"
+        dataframe.loc[mask, "enter_long"] = 1
+        dataframe.loc[mask, "enter_tag"] = tag
         return dataframe
 
     def _populate_entry_hybrid(
-        self, dataframe: DataFrame, metadata: dict, context: str
+        self,
+        dataframe: DataFrame,
+        metadata: dict,
+        context: str,
+        pred_col: str,
     ) -> DataFrame:
-        """
-        Hybrid strategy entry logic
-        Aggressive: more lenient filters, lower threshold
-        """
-        conditions = []
-
-        # ML prediction (lower threshold: 0.1%)
-        conditions.append(dataframe["&-target"] > 0.001)
-
-        # Trend: EMA 50 above EMA 200 (broader uptrend)
-        conditions.append(dataframe["ema_50"] > dataframe["ema_200"])
-
-        # RSI: not overbought
-        conditions.append(dataframe["rsi"] < 70)
-
-        # MACD: bullish
-        conditions.append(dataframe["macd"] > dataframe["macdsignal"])
-
-        # BTC trend filter (if available)
-        if "%btc_trend" in dataframe.columns:
-            conditions.append(dataframe["%btc_trend"] > -0.05)
-
-        # Volume
-        conditions.append(dataframe["volume"] > 0)
-
-        # Combine
-        if conditions:
-            dataframe.loc[reduce(lambda x, y: x & y, conditions), "enter_long"] = 1
-
-        # Tag
-        dataframe["enter_tag"] = f"hybrid_bandit_ctx_{context}"
-
+        mask = self._hybrid_entry_mask(dataframe, pred_col)
+        tag = f"hybrid_bandit_ctx_{context}"
+        dataframe.loc[mask, "enter_long"] = 1
+        dataframe.loc[mask, "enter_tag"] = tag
         return dataframe
 
-    # ========================================================================
-    # EXIT LOGIC (uses same strategy as entry)
-    # ========================================================================
+    # =====================================================================
+    # EXIT LOGIC
+    # =====================================================================
 
     def populate_exit_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
-        """
-        Exit logic based on which strategy was used for entry
-        """
-        pair = metadata["pair"]
-
-        # Check predictions
-        if "&-target" not in dataframe.columns:
-            dataframe["exit_long"] = 0
-            return dataframe
-
-        # Use same strategy as entry (stored in map)
-        selected = self.pair_strategy_map.get(pair, "lea")
-
-        if selected == "lea":
-            dataframe = self._populate_exit_lea(dataframe, metadata)
-        else:
-            dataframe = self._populate_exit_hybrid(dataframe, metadata)
-
+        """Keep dataframe exit neutral; use custom_exit() for all trade-specific exits."""
+        dataframe["exit_long"] = 0
         return dataframe
 
-    def _populate_exit_lea(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
+    def custom_stoploss(
+        self,
+        pair: str,
+        trade: Trade,
+        current_time,
+        current_rate: float,
+        current_profit: float,
+        **kwargs,
+    ) -> float:
         """
-        LEA exit: only on strong negative prediction
-        (ROI and stoploss handle most exits)
+        ATR-based dynamic stop-loss.
+        Stop distance = entry_price - (ATR × atr_multiplier)
+        Tightens as profit increases.
         """
-        dataframe.loc[dataframe["&-target"] < -0.004, "exit_long"] = 1
-        return dataframe
+        dataframe, _ = self.dp.get_analyzed_dataframe(pair, self.timeframe)
+        if dataframe is None or dataframe.empty:
+            return self.stoploss
 
-    def _populate_exit_hybrid(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
+        last = dataframe.iloc[-1]
+        atr = last.get("atr")
+
+        if atr is None or pd.isna(atr):
+            return self.stoploss
+
+        # Cache ATR for the pair
+        self._atr_cache[pair] = float(atr)
+
+        entry_price = trade.open_rate
+        stop_distance = self.atr_multiplier * atr
+
+        # Calculate stop price
+        stop_price = entry_price - stop_distance
+
+        # Progressive stop tightening with profit
+        if current_profit > 0.030:
+            # At 3%+ profit: stop just below entry (lock in profit)
+            stop_price = max(entry_price * 0.995, stop_price)
+        elif current_profit > 0.015:
+            # At 1.5%+ profit: allow 0.5% below entry
+            stop_price = max(entry_price * 0.998, stop_price)
+        elif current_profit > 0.008:
+            # At 0.8%+ profit: use half ATR distance
+            stop_price = entry_price - (stop_distance * 0.5)
+        # Below that: full ATR distance
+
+        stop_pct = (stop_price / entry_price) - 1
+
+        # Never exceed configured hard stoploss
+        return max(stop_pct, -abs(self.stoploss))
+
+    def custom_exit(
+        self,
+        pair: str,
+        trade: Trade,
+        current_time,
+        current_rate: float,
+        current_profit: float,
+        **kwargs,
+    ) -> Optional[str]:
         """
-        Hybrid exit: negative prediction OR technical signals
+        Trade-specific exit logic:
+        1. Hard time exit (60 min LEA, 90 min Hybrid/FinAgent) — no conditions
+        2. Pivot take-profit (R1 for LEA, R2 for Hybrid/FinAgent)
+        3. Partial take-profit signal at configured profit level
+        4. Hard stoploss guard at -3%
         """
-        # AI exit
-        ai_exit = dataframe["&-target"] < -0.001
+        dataframe, _ = self.dp.get_analyzed_dataframe(pair, self.timeframe)
+        if dataframe is None or dataframe.empty:
+            return None
 
-        # MACD bearish
-        macd_exit = dataframe["macd"] < dataframe["macdsignal"]
+        last = dataframe.iloc[-1]
+        tag = (trade.enter_tag or "").lower()
+        trade_age = current_time - trade.open_date_utc
 
-        # RSI overbought
-        rsi_exit = dataframe["rsi"] > 80
+        # =========================================================
+        # 1. HARD TIME EXIT — fires first, no conditions
+        # =========================================================
+        if "lea" in tag:
+            if trade_age >= timedelta(minutes=self.lea_max_hold_minutes):
+                return "time_exit_horizon"
 
-        # Combine (OR logic)
-        dataframe.loc[ai_exit | macd_exit | rsi_exit, "exit_long"] = 1
+        if "hybrid" in tag or "finagent" in tag:
+            if trade_age >= timedelta(minutes=self.hybrid_max_hold_minutes):
+                return "time_exit_horizon"
 
-        return dataframe
+        # =========================================================
+        # 2. PIVOT TAKE-PROFIT
+        # =========================================================
+        if "lea" in tag:
+            if current_rate >= last["r1"]:
+                return "pivot_r1_take_profit"
 
-    # ========================================================================
-    # TRADE CONFIRMATION (uses selected strategy's logic)
-    # ========================================================================
+        if "hybrid" in tag or "finagent" in tag:
+            if current_rate >= last["r2"]:
+                return "pivot_r2_take_profit"
+
+        # =========================================================
+        # 3. PARTIAL TAKE-PROFIT SIGNAL
+        # =========================================================
+        if self.partial_tp_enabled and current_profit >= self.partial_tp_profit:
+            return "partial_tp_early"
+
+        # =========================================================
+        # 4. HARD STOPLOSS GUARD
+        # =========================================================
+        if current_profit < -0.03:
+            return "hard_stoploss_guard"
+
+        return None
+
+    # =====================================================================
+    # ENTRY CONFIRMATION
+    # =====================================================================
 
     def confirm_trade_entry(
         self,
@@ -540,34 +769,110 @@ class BanditMetaStrategy(IStrategy):
         current_time,
         entry_tag,
         side: str,
-        **kwargs
+        **kwargs,
     ) -> bool:
-        """Final trade confirmation"""
-        dataframe, _ = self.dp.get_analyzed_dataframe(pair, self.timeframe)
-        last_candle = dataframe.iloc[-1]
-
-        # Check predictions
-        if "&-target" not in dataframe.columns:
+        """Final trade confirmation using the actual selected entry_tag."""
+        def _reject(reason: str, context_val: str = "unknown", strategy_val: str = "unknown") -> bool:
+            self.log_event(
+                "entry_rejected",
+                {
+                    "pair": pair,
+                    "entry_tag": entry_tag or "",
+                    "context": context_val,
+                    "strategy": strategy_val,
+                    "reason": reason,
+                    "pred_col": pred_col if "pred_col" in locals() else None,
+                    "pred_value": self._safe_float(pred_value) if "pred_value" in locals() else None,
+                    "quantile": self._safe_float(quantile) if "quantile" in locals() else None,
+                    "volume": self._safe_float(volume) if "volume" in locals() else None,
+                    "avg_volume_20": self._safe_float(avg_volume) if "avg_volume" in locals() else None,
+                    "close": self._safe_float(close) if "close" in locals() else None,
+                    "atr": self._safe_float(atr) if "atr" in locals() else None,
+                },
+            )
             return False
 
-        # Determine which strategy was selected (from entry_tag)
-        if "lea" in entry_tag.lower():
-            # LEA confirmation: stricter
-            if last_candle["&-target"] <= 0.005:
-                return False
+        dataframe, _ = self.dp.get_analyzed_dataframe(pair, self.timeframe)
+        if dataframe is None or dataframe.empty:
+            return _reject("no_dataframe")
 
-            # Confirm uptrend
-            if last_candle["close"] <= last_candle["ema_50"]:
-                return False
+        last_candle = dataframe.iloc[-1]
+        pred_col = self._get_prediction_column(dataframe)
+        if pred_col is None:
+            return _reject("missing_prediction_column")
+
+        tag = (entry_tag or "").lower()
+        pred_value = last_candle.get(pred_col, np.nan)
+        quantile = last_candle.get("pred_quantile", np.nan)
+        volume = last_candle.get("volume", np.nan)
+        avg_volume = dataframe["volume"].rolling(20).mean().iloc[-1]
+        close = last_candle.get("close", np.nan)
+        ema_50 = last_candle.get("ema_50", np.nan)
+        atr = last_candle.get("atr", np.nan)
+        pivot = last_candle.get("pivot", np.nan)
+        r1 = last_candle.get("r1", np.nan)
+        context = "unknown"
+        if "_ctx_" in tag:
+            context = tag.split("_ctx_", 1)[1]
+
+        if pd.isna(pred_value) or pd.isna(volume) or pd.isna(avg_volume):
+            return _reject("nan_required_field", context_val=context)
+
+        # Strategy-specific confirmation
+        if "lea" in tag:
+            if pred_value <= self.lea_entry_threshold:
+                return _reject("lea_pred_below_threshold", context_val=context, strategy_val="lea")
+            if pd.notna(quantile) and quantile < self.ml_quantile_threshold:
+                return _reject("lea_pred_below_quantile", context_val=context, strategy_val="lea")
+            if pd.notna(close) and pd.notna(pivot) and close <= pivot:
+                return _reject("lea_below_pivot", context_val=context, strategy_val="lea")
+            if pd.notna(close) and pd.notna(r1) and close >= r1:
+                return _reject("lea_at_resistance_r1", context_val=context, strategy_val="lea")
+            selected_strategy = "lea"
+
+        elif "hybrid" in tag:
+            if pred_value <= self.hybrid_entry_threshold:
+                return _reject("hybrid_pred_below_threshold", context_val=context, strategy_val="hybrid")
+            if pd.notna(quantile) and quantile < self.ml_quantile_threshold:
+                return _reject("hybrid_pred_below_quantile", context_val=context, strategy_val="hybrid")
+            if pd.notna(close) and pd.notna(pivot) and close <= pivot:
+                return _reject("hybrid_below_pivot", context_val=context, strategy_val="hybrid")
+            selected_strategy = "hybrid"
 
         else:
-            # Hybrid confirmation: more lenient
-            if last_candle["&-target"] <= 0.0005:
-                return False
+            return _reject("unknown_entry_tag", context_val=context)
 
-        # Volume check (both strategies)
-        avg_volume = dataframe["volume"].rolling(20).mean().iloc[-1]
-        if last_candle["volume"] < avg_volume * 0.3:
-            return False
+        # Common liquidity sanity check
+        if volume < avg_volume * 0.3:
+            return _reject(
+                "liquidity_filter_failed",
+                context_val=context,
+                strategy_val=selected_strategy,
+            )
+
+        self.log_selection(
+            pair=pair,
+            context=context,
+            strategy=selected_strategy,
+            entry_tag=entry_tag or "",
+        )
+        self.log_event(
+            "entry_confirmed",
+            {
+                "pair": pair,
+                "entry_tag": entry_tag or "",
+                "context": context,
+                "strategy": selected_strategy,
+                "pred_col": pred_col,
+                "pred_value": self._safe_float(pred_value),
+                "quantile": self._safe_float(quantile),
+                "volume": self._safe_float(volume),
+                "avg_volume_20": self._safe_float(avg_volume),
+                "close": self._safe_float(close),
+                "atr": self._safe_float(atr),
+                "rate": self._safe_float(rate),
+                "side": side,
+            },
+        )
 
         return True

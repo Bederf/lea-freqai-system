@@ -61,6 +61,13 @@ BOTS: tuple[BotConfig, ...] = (
         ROOT / "user_data" / "config_diagnostic.json",
         ROOT / "logs" / "freqtrade_diagnostic.log",
     ),
+    BotConfig(
+        "bbrsi",
+        "freqtrade-bbrsi.service",
+        ROOT / "user_data" / "tradesv3_bbrsi.sqlite",
+        ROOT / "user_data" / "config_bbrsi.json",
+        ROOT / "logs" / "freqtrade_bbrsi.log",
+    ),
 )
 
 

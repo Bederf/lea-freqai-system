@@ -5,10 +5,19 @@ After=network.target
 [Service]
 Type=simple
 User=bederf
-WorkingDirectory=/home/bederf/freqtrade
-ExecStart=/home/bederf/freqtrade/.venv/bin/freqtrade trade --config /home/bederf/freqtrade/config_finagent.json --strategy FinAgentStrategy_v2_RiskManaged --dry-run
+WorkingDirectory=/home/bederf/lea-freqai-system
+ExecStart=/home/bederf/lea-freqai-system/.venv/bin/python /home/bederf/lea-freqai-system/run_freqtrade_patched.py trade \
+    --config /home/bederf/lea-freqai-system/user_data/config_finagent.json \
+    --strategy FinAgentStrategy_v2_RiskManaged \
+    --freqaimodel PyTorchMLPRegressor \
+    --db-url sqlite:////home/bederf/lea-freqai-system/user_data/tradesv3_finagent.sqlite \
+    --logfile /home/bederf/lea-freqai-system/logs/finagent.log
 Restart=always
 RestartSec=10
+KillSignal=SIGINT
+TimeoutStopSec=180
+SuccessExitStatus=130 143
+RestartPreventExitStatus=130 143
 
 [Install]
 WantedBy=multi-user.target
