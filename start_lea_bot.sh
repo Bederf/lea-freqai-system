@@ -1,7 +1,8 @@
 #!/bin/bash
 # LEA FreqAI Bot Startup Script
 
-cd /home/pi/lea-freqai-system
+DEPLOY_DIR="/home/bederf/lea-freqai-system"
+cd "$DEPLOY_DIR"
 
 # Kill any existing bots
 killall -9 freqtrade 2>/dev/null
@@ -15,7 +16,7 @@ source .env
 nohup freqtrade trade \
   --strategy LeaFreqAIStrategy \
   --freqaimodel PyTorchMLPRegressor \
-  --config /home/pi/lea-freqai-system/user_data/config.json \
+  --config $DEPLOY_DIR/user_data/config.json \
   > lea_bot.log 2>&1 &
 
 echo "LEA Bot started with PID: $!"

@@ -1,0 +1,36 @@
+[Unit]
+Description=Freqtrade BBRSI Strategy (Mean-Reversion Testing)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=bederf
+Group=bederf
+WorkingDirectory=/home/bederf/lea-freqai-system
+Environment="PATH=/home/bederf/lea-freqai-system/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+EnvironmentFile=/home/bederf/lea-freqai-system/.env
+
+ExecStart=/home/bederf/lea-freqai-system/.venv/bin/python /home/bederf/lea-freqai-system/run_freqtrade_patched.py trade \
+    --config /home/bederf/lea-freqai-system/user_data/config_bbrsi.json \
+    --strategy BBRSI \
+    --db-url sqlite:////home/bederf/lea-freqai-system/user_data/tradesv3_bbrsi.sqlite \
+    --logfile /home/bederf/lea-freqai-system/logs/freqtrade_bbrsi.log
+
+Restart=on-failure
+RestartSec=30
+StartLimitBurst=5
+StartLimitInterval=500
+KillSignal=SIGINT
+TimeoutStopSec=180
+SuccessExitStatus=130 143
+RestartPreventExitStatus=130 143
+
+MemoryMax=512M
+CPUQuota=30%
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

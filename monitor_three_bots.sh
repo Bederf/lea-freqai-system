@@ -29,11 +29,11 @@ get_bot_stats() {
     # Query trade statistics
     local total_trades=$(sqlite3 "$db_path" "SELECT COUNT(*) FROM trades;" 2>/dev/null || echo "0")
     local open_trades=$(sqlite3 "$db_path" "SELECT COUNT(*) FROM trades WHERE is_open=1;" 2>/dev/null || echo "0")
-    local wins=$(sqlite3 "$db_path" "SELECT COUNT(*) FROM trades WHERE profit_abs > 0 AND is_open=0;" 2>/dev/null || echo "0")
-    local losses=$(sqlite3 "$db_path" "SELECT COUNT(*) FROM trades WHERE profit_abs < 0 AND is_open=0;" 2>/dev/null || echo "0")
-    local total_profit=$(sqlite3 "$db_path" "SELECT COALESCE(SUM(profit_abs), 0) FROM trades WHERE is_open=0;" 2>/dev/null || echo "0")
-    local avg_profit=$(sqlite3 "$db_path" "SELECT COALESCE(AVG(profit_abs), 0) FROM trades WHERE is_open=0;" 2>/dev/null || echo "0")
-    local max_loss=$(sqlite3 "$db_path" "SELECT COALESCE(MIN(profit_abs), 0) FROM trades WHERE is_open=0;" 2>/dev/null || echo "0")
+    local wins=$(sqlite3 "$db_path" "SELECT COUNT(*) FROM trades WHERE close_profit_abs > 0 AND is_open=0;" 2>/dev/null || echo "0")
+    local losses=$(sqlite3 "$db_path" "SELECT COUNT(*) FROM trades WHERE close_profit_abs < 0 AND is_open=0;" 2>/dev/null || echo "0")
+    local total_profit=$(sqlite3 "$db_path" "SELECT COALESCE(SUM(close_profit_abs), 0) FROM trades WHERE is_open=0;" 2>/dev/null || echo "0")
+    local avg_profit=$(sqlite3 "$db_path" "SELECT COALESCE(AVG(close_profit_abs), 0) FROM trades WHERE is_open=0;" 2>/dev/null || echo "0")
+    local max_loss=$(sqlite3 "$db_path" "SELECT COALESCE(MIN(close_profit_abs), 0) FROM trades WHERE is_open=0;" 2>/dev/null || echo "0")
     
     # Calculate win rate
     local closed_trades=$((wins + losses))
@@ -45,8 +45,8 @@ get_bot_stats() {
     
     # Calculate profit factor
     if [ $losses -gt 0 ]; then
-        local positive_sum=$(sqlite3 "$db_path" "SELECT COALESCE(SUM(profit_abs), 0) FROM trades WHERE profit_abs > 0 AND is_open=0;" 2>/dev/null || echo "0")
-        local negative_sum=$(sqlite3 "$db_path" "SELECT COALESCE(ABS(SUM(profit_abs)), 0) FROM trades WHERE profit_abs < 0 AND is_open=0;" 2>/dev/null || echo "0")
+        local positive_sum=$(sqlite3 "$db_path" "SELECT COALESCE(SUM(close_profit_abs), 0) FROM trades WHERE close_profit_abs > 0 AND is_open=0;" 2>/dev/null || echo "0")
+        local negative_sum=$(sqlite3 "$db_path" "SELECT COALESCE(ABS(SUM(close_profit_abs)), 0) FROM trades WHERE close_profit_abs < 0 AND is_open=0;" 2>/dev/null || echo "0")
         if [ $negative_sum != "0" ]; then
             local profit_factor=$(echo "scale=2; $positive_sum / $negative_sum" | bc)
         else

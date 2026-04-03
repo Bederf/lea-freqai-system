@@ -120,8 +120,12 @@ class BaseClassifierModel(IFreqaiModel):
 
         pred_df = pd.concat([pred_df, pred_df_prob], axis=1)
 
-        if dk.feature_pipeline["di"]:
-            dk.DI_values = dk.feature_pipeline["di"].di_values
+        if self.freqai_info["feature_parameters"].get("DI_threshold", 0) > 0:
+            di_step = dk.feature_pipeline["di"]
+            if di_step:
+                dk.DI_values = di_step.di_values
+            else:
+                dk.DI_values = np.zeros(outliers.shape[0])
         else:
             dk.DI_values = np.zeros(outliers.shape[0])
         dk.do_predict = outliers

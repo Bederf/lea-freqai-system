@@ -142,7 +142,11 @@ class PyTorchTransformerRegressor(BasePyTorchRegressor):
         pred_df, _, _ = dk.label_pipeline.inverse_transform(pred_df)
 
         if self.ft_params.get("DI_threshold", 0) > 0:
-            dk.DI_values = dk.feature_pipeline["di"].di_values
+            di_step = dk.feature_pipeline["di"]
+            if di_step:
+                dk.DI_values = di_step.di_values
+            else:
+                dk.DI_values = np.zeros(outliers.shape[0])
         else:
             dk.DI_values = np.zeros(outliers.shape[0])
         dk.do_predict = outliers
