@@ -297,6 +297,12 @@ class LeaFreqAIStrategy(IStrategy):
         # === ATR (for dynamic stop-loss) ===
         dataframe["atr"] = ta.ATR(dataframe, timeperiod=self.atr_period)
 
+        # === Supply & Demand Zones ===
+        # Demand Zone: recent support (rolling min of low over 20 periods)
+        dataframe["demand_zone"] = dataframe["low"].rolling(20).min()
+        # Supply Zone: recent resistance (rolling max of high over 20 periods)
+        dataframe["supply_zone"] = dataframe["high"].rolling(20).max()
+
         # === Prediction quantile (top X% only) ===
         if "&-target" in dataframe.columns:
             dataframe["pred_quantile"] = dataframe["&-target"].rank(pct=True)
@@ -336,7 +342,7 @@ class LeaFreqAIStrategy(IStrategy):
 
     def populate_entry_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         """
-        Entry signals with pivot + quantile filters.
+        Entry signals with pivot + quantile + supply/demand zone filters.
 
         LEA entry requirements:
         1. ML prediction > threshold AND in top quantile
@@ -345,6 +351,8 @@ class LeaFreqAIStrategy(IStrategy):
         4. close < r1 (avoid resistance)
         5. RSI < 70 (not overbought)
         6. Volume > 0
+        7. close <= demand_zone * 1.02 (near recent support)
+        8. close < supply_zone * 0.98 (away from recent resistance)
         """
         if "&-target" not in dataframe.columns:
             logger.warning(f"[{metadata['pair']}] No &-target column in populate_entry_trend!")
@@ -357,10 +365,15 @@ class LeaFreqAIStrategy(IStrategy):
             dataframe[pred_col] > self.ml_entry_threshold,
             self._quantile_filter(dataframe, pred_col),
             dataframe["do_predict"] == 1 if "do_predict" in dataframe.columns else pd.Series(True, index=dataframe.index),
-            dataframe["close"] > dataframe["pivot"],      # Bullish bias
-            dataframe["close"] < dataframe["r1"],          # Avoid resistance (between pivot and R1)
+            dataframe["close"] > dataframe["pivot"],         # Bullish bias
+            dataframe["close"] < dataframe["r1"],            # Avoid resistance (between pivot and R1)
             dataframe["rsi"] < 70,
             dataframe["volume"] > 0,
+            # === Supply & Demand Zone Filters ===
+            # Only buy within 2% of demand zone (near recent support)
+            dataframe["close"] <= dataframe["demand_zone"] * 1.02,
+            # Avoid buying near supply zone (near recent resistance)
+            dataframe["close"] < dataframe["supply_zone"] * 0.98,
         ]
 
         entry_signal = reduce(lambda x, y: x & y, conditions)
