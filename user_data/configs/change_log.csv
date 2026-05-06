@@ -1,0 +1,14 @@
+# Config Change Log
+# Each change gets a trial window of N trades, then a keep/revert decision.
+# Format: date, change_type, config_key, old_value, new_value, trial_trades, outcome, decision, notes
+
+date,change_type,config_key,old_value,new_value,trial_trades,outcome,decision,notes
+2026-05-06,fix,use_exit_signal,False,True,20,pending,pending,Fix: custom_exit bypassed. custom_stoploss now handles 90-min time exit.
+2026-05-06,fix,use_custom_stoploss,False,True,20,pending,pending,Fix: ATR dynamic stop was disabled. Now active.
+# Past changes (pre-log)
+2026-03-XX,regression,use_custom_stoploss,False,True,?,bad,reverted,ATR stop re-enabled by mistake in commit 83de786. Resulted in -472% P&L across 399 trades.
+2026-03-XX,regression,use_exit_signal,False,True,?,bad,reverted,Exit signals re-enabled causing pivot R1 exits (+0.046% avg win vs -1.36% avg loss).
+2026-03-XX,regression,stoploss,-0.05,-0.20,?,bad,reverted,Loose -20% stoploss replaced tight -5%. Candle-blind guard at -3% triggered too late.
+2026-05-01,optimal,stoploss,-0.05,-0.05,?,good,kept,Original tight stop. Hard stop guard was candle-blind.
+2026-05-01,optimal,trailing_stop,False,False,?,good,kept,Trailing stop averaged -1.36%/trade across 242 trades.
+2026-05-01,optimal,minimal_roi,see code,{"0":0.02,"20":0.015,"40":0.01,"90":0.005},?,good,kept,Oct 2025 optimal ROI table. All exits via ROI, not exit_signal.

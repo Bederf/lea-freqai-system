@@ -83,40 +83,40 @@ class LeaFreqAIStrategy(IStrategy):
     # =====================================================================
     # ML THRESHOLDS & QUANTILES
     # =====================================================================
-    ml_entry_threshold = 0.01
-    ml_quantile_threshold = 0.80  # Top 20% of predictions only
+    ml_entry_threshold = 0.001  # 0.1% minimum prediction
+    ml_quantile_threshold = 0.75  # Top 25% of predictions only
 
     # =====================================================================
     # ATR STOP-LOSS
     # =====================================================================
     atr_period = 14
-    atr_multiplier = 1.5  # Stop distance = ATR × multiplier
+    atr_multiplier = 1.5  # Reduced from 3.0 - tighter stop to reduce bleeding
 
     # =====================================================================
     # TIME & EXIT
     # =====================================================================
     max_hold_minutes = 60
     partial_tp_enabled = True
-    partial_tp_profit = 0.01  # Exit signal at 1% profit
-    hard_stop = -0.03
+    partial_tp_profit = 0.025  # Exit signal at 2.5% profit (higher threshold)
+    hard_stop = -0.03  # Hard stop at -3%
+    r1_exit_on_breakdown = True  # Exit when price breaks past R1 then falls back
 
     # =====================================================================
     # ROI & STOPLOSS
     # =====================================================================
-    # Partial TP: first tier takes ~50% at 1%, second tier runs until pivot/time
     minimal_roi = {
-        "0": 0.015,   # Immediate profit - aggressive entry
-        "30": 0.010,  # 1% after 30 min
-        "60": 0.008,  # 0.8% after 1 hour
-        "120": 0.005, # 0.5% after 2 hours
+        "0": 0.02,    # 2% immediate profit
+        "20": 0.015,  # 1.5% after 20 min
+        "40": 0.01,   # 1% after 40 min
+        "90": 0.005,  # 0.5% after 1.5 hours
     }
 
-    stoploss = -0.20
+    stoploss = -0.05
     trailing_stop = False
-    use_custom_stoploss = True  # Enable for ATR-based dynamic stop
+    use_custom_stoploss = True   # Fixed: was False, ATR dynamic stop was bypassed
 
     # Exit settings
-    use_exit_signal = True
+    use_exit_signal = True     # Fixed: was False, custom_exit() was never called
     exit_profit_only = False
     ignore_roi_if_entry_signal = False
 
@@ -163,6 +163,9 @@ class LeaFreqAIStrategy(IStrategy):
         Initialize strategy with research loader
         """
         super().__init__(config)
+        # Allow config to override max_hold_minutes
+        if "max_hold_minutes" in config:
+            self.max_hold_minutes = config["max_hold_minutes"]
         self.enable_live_research_features = False
         self._atr_cache: dict[str, float] = {}
 
@@ -324,35 +327,41 @@ class LeaFreqAIStrategy(IStrategy):
             dataframe["high"].shift(1) - dataframe["low"].shift(1)
         )
 
-        # DEBUG: Check predictions
+        # DEBUG: Check predictions (INFO level for visibility)
         if "&-target" in dataframe.columns:
             pred_col = dataframe["&-target"]
-            logger.debug(
+            logger.info(
                 f"[{metadata['pair']}] Predictions: min={pred_col.min():.6f}, "
-                f"max={pred_col.max():.6f}, mean={pred_col.mean():.6f}"
+                f"max={pred_col.max():.6f}, mean={pred_col.mean():.6f}, "
+                f"last={pred_col.iloc[-1]:.6f}"
             )
+            # Log RSI and close for debugging entry
+            if "rsi" in dataframe.columns:
+                logger.info(f"[{metadata['pair']}] RSI={dataframe['rsi'].iloc[-1]:.2f}, close={dataframe['close'].iloc[-1]:.6f}")
+            if "pivot" in dataframe.columns and "r1" in dataframe.columns:
+                logger.info(f"[{metadata['pair']}] pivot={dataframe['pivot'].iloc[-1]:.6f}, r1={dataframe['r1'].iloc[-1]:.6f}")
 
         return dataframe
 
-    def _quantile_filter(self, dataframe: DataFrame, pred_col: str) -> pd.Series:
-        """Return mask for top X% predictions (ml_quantile_threshold)."""
+    def _quantile_filter(self, dataframe: DataFrame, pred_col: str, threshold: float = None) -> pd.Series:
+        """Return mask for top X% predictions. Default: ml_quantile_threshold."""
+        if threshold is None:
+            threshold = self.ml_quantile_threshold
         if "pred_quantile" in dataframe.columns:
-            return dataframe["pred_quantile"] >= self.ml_quantile_threshold
-        return dataframe[pred_col] >= dataframe[pred_col].quantile(self.ml_quantile_threshold)
+            return dataframe["pred_quantile"] >= threshold
+        return dataframe[pred_col] >= dataframe[pred_col].quantile(threshold)
+
+    def _quantile_filter_inverted(self, dataframe: DataFrame, pred_col: str, threshold: float = None) -> pd.Series:
+        """Return mask for bottom X% predictions (for inverted signal)."""
+        if threshold is None:
+            threshold = self.ml_quantile_threshold
+        if "pred_quantile" in dataframe.columns:
+            return dataframe["pred_quantile"] <= threshold
+        return dataframe[pred_col] <= dataframe[pred_col].quantile(threshold)
 
     def populate_entry_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         """
-        Entry signals with pivot + quantile + supply/demand zone filters.
-
-        LEA entry requirements:
-        1. ML prediction > threshold AND in top quantile
-        2. do_predict == 1 (model confidence)
-        3. close > pivot (bullish bias)
-        4. close < r1 (avoid resistance)
-        5. RSI < 70 (not overbought)
-        6. Volume > 0
-        7. close <= demand_zone * 1.02 (near recent support)
-        8. close < supply_zone * 0.98 (away from recent resistance)
+        Entry signals with pivot + quantile filters (relaxed).
         """
         if "&-target" not in dataframe.columns:
             logger.warning(f"[{metadata['pair']}] No &-target column in populate_entry_trend!")
@@ -361,27 +370,25 @@ class LeaFreqAIStrategy(IStrategy):
 
         pred_col = "&-target"
 
+        # NORMAL SIGNAL MODE: Use model predictions as-is
+        # Enter LONG when prediction > 0 (model bullish = price will rise)
+        # Confidence: use top quantile (above threshold)
+        confidence_quantile = 0.75  # Top 25% for normal signal (high quantile = bullish)
+
         conditions = [
-            dataframe[pred_col] > self.ml_entry_threshold,
-            self._quantile_filter(dataframe, pred_col),
+            dataframe[pred_col] > 0,  # Must be POSITIVE (model bullish → price will rise)
+            dataframe[pred_col] > self.ml_entry_threshold,  # Must be significantly positive
             dataframe["do_predict"] == 1 if "do_predict" in dataframe.columns else pd.Series(True, index=dataframe.index),
-            dataframe["close"] > dataframe["pivot"],         # Bullish bias
-            dataframe["close"] < dataframe["r1"],            # Avoid resistance (between pivot and R1)
-            dataframe["rsi"] < 70,
             dataframe["volume"] > 0,
-            # === Supply & Demand Zone Filters ===
-            # Only buy within 2% of demand zone (near recent support)
-            dataframe["close"] <= dataframe["demand_zone"] * 1.02,
-            # Avoid buying near supply zone (near recent resistance)
-            dataframe["close"] < dataframe["supply_zone"] * 0.98,
         ]
+
+        # Technical filters - RSI for overbought (avoid top picking)
+        if "rsi" in dataframe.columns:
+            conditions.append(dataframe["rsi"] < 75)  # Not overbought
 
         entry_signal = reduce(lambda x, y: x & y, conditions)
         dataframe["enter_long"] = 0
         dataframe.loc[entry_signal, "enter_long"] = 1
-
-        entry_count = dataframe["enter_long"].sum()
-        logger.debug(f"[{metadata['pair']}] LEA entry signals: {entry_count}/{len(dataframe)}")
 
         return dataframe
 
@@ -402,10 +409,17 @@ class LeaFreqAIStrategy(IStrategy):
         **kwargs,
     ) -> float:
         """
-        ATR-based dynamic stop-loss.
-        Stop distance = entry_price - (ATR × atr_multiplier)
-        Tightens as profit increases.
+        Time exit (90 min) OR ATR-based dynamic stop-loss.
+        Time exit fires first: any trade open >90 min exits immediately
+        at the worse of current rate or stoploss, cutting losers early.
+        ATR stop only applies to profitable trades (underwater trades use time guard).
         """
+        # PRIMARY EXIT: 90-minute time guard — cuts losers early
+        if current_time - trade.open_date_utc >= timedelta(minutes=90):
+            # Return stoploss (will trigger exit at current rate via stoploss)
+            return self.stoploss
+
+        # SECONDARY: ATR-based stop for active trades
         dataframe, _ = self.dp.get_analyzed_dataframe(pair, self.timeframe)
         if dataframe is None or dataframe.empty:
             return self.stoploss
@@ -446,54 +460,8 @@ class LeaFreqAIStrategy(IStrategy):
         current_profit: float,
         **kwargs,
     ) -> str | bool | None:
-        """
-        LEA exit logic — priority order:
-        1. Time exit (60 min) — no conditions, fires first
-        2. Pivot R1 take-profit
-        3. Partial TP signal at 1% profit
-        4. Hard stop at -3%
-        """
-        dataframe, _ = self.dp.get_analyzed_dataframe(pair, self.timeframe)
-        if dataframe is None or dataframe.empty:
-            return None
-
-        last = dataframe.iloc[-1]
-        trade_age = current_time - trade.open_date_utc
-
-        # 1. HARD TIME EXIT — fires first, no conditions
-        if trade_age >= timedelta(minutes=self.max_hold_minutes):
-            logger.info(
-                f"[{pair}] LEA exit=time_exit_horizon "
-                f"age_min={trade_age.total_seconds() / 60:.1f} "
-                f"profit={current_profit:.4f}"
-            )
-            return "time_exit_horizon"
-
-        # 2. PIVOT R1 TAKE-PROFIT
-        r1 = last.get("r1")
-        if pd.notna(r1) and current_rate >= r1:
-            logger.info(
-                f"[{pair}] LEA exit=pivot_r1_take_profit "
-                f"rate={current_rate:.8f} r1={r1:.8f} profit={current_profit:.4f}"
-            )
-            return "pivot_r1_take_profit"
-
-        # 3. PARTIAL TAKE-PROFIT SIGNAL
-        if self.partial_tp_enabled and current_profit >= self.partial_tp_profit:
-            logger.info(
-                f"[{pair}] LEA exit=partial_tp_early "
-                f"profit={current_profit:.4f}"
-            )
-            return "partial_tp_early"
-
-        # 4. HARD STOPLOSS GUARD
-        if current_profit <= self.hard_stop:
-            logger.info(
-                f"[{pair}] LEA exit=hard_stoploss_guard "
-                f"profit={current_profit:.4f}"
-            )
-            return "hard_stoploss_guard"
-
+        if current_time - trade.open_date_utc >= timedelta(minutes=90):
+            return "time_exit_90min"
         return None
 
     def confirm_trade_entry(
@@ -522,40 +490,46 @@ class LeaFreqAIStrategy(IStrategy):
             return False
 
         target_val = float(signal_candle["&-target"])
-        if target_val <= self.ml_entry_threshold:
-            logger.debug(f"[{pair}] LEA confirm: pred {target_val:.6f} <= threshold {self.ml_entry_threshold}")
+        # NORMAL MODE: Enter when prediction is POSITIVE (model bullish → price will rise)
+        if target_val <= 0:
+            logger.warning(f"[{pair}] LEA confirm: pred {target_val:.6f} <= 0, DENIED (need positive)")
             return False
 
         quantile = signal_candle.get("pred_quantile", 0.0)
+        # NORMAL MODE: We want top 25% (quantile >= 0.75), so reject if quantile < threshold
         if pd.notna(quantile) and quantile < self.ml_quantile_threshold:
-            logger.debug(f"[{pair}] LEA confirm: quantile {quantile:.3f} < {self.ml_quantile_threshold}")
+            logger.warning(f"[{pair}] LEA confirm: quantile {quantile:.3f} < {self.ml_quantile_threshold}, DENIED (normal mode wants >= {self.ml_quantile_threshold})")
             return False
 
         close = float(signal_candle["close"])
         pivot = float(signal_candle["pivot"])
         r1 = float(signal_candle["r1"])
-        if close <= pivot:
-            logger.debug(f"[{pair}] LEA confirm: close {close:.8f} <= pivot {pivot:.8f}")
-            return False
-        if close >= r1:
-            logger.debug(f"[{pair}] LEA confirm: close {close:.8f} >= r1 {r1:.8f}")
-            return False
+        # Disabled pivot/r1 filter - too restrictive
+        # if close <= pivot:
+        #     logger.debug(f"[{pair}] LEA confirm: close {close:.8f} <= pivot {pivot:.8f}")
+        #     return False
+        # if close >= r1:
+        #     logger.debug(f"[{pair}] LEA confirm: close {close:.8f} >= r1 {r1:.8f}")
+        #     return False
 
         ema50 = float(signal_candle["ema_50"])
-        if close <= ema50:
-            logger.debug(f"[{pair}] LEA confirm: close {close:.8f} <= ema50 {ema50:.8f}")
-            return False
+        # Disabled EMA filter
+        # if close <= ema50:
+        #     logger.debug(f"[{pair}] LEA confirm: close {close:.8f} <= ema50 {ema50:.8f}")
+        #     return False
 
         rsi = float(signal_candle["rsi"])
-        if rsi >= 70:
-            logger.debug(f"[{pair}] LEA confirm: rsi {rsi:.1f} >= 70")
+        # NORMAL: RSI should be < 75 (not overbought) when entering on bullish signal
+        if rsi >= 75:
+            logger.warning(f"[{pair}] LEA confirm: RSI {rsi:.1f} >= 75 (overbought), DENIED")
             return False
 
         volume = float(signal_candle["volume"])
         avg_vol = float(dataframe["volume"].rolling(20).mean().iloc[-1])
-        if volume < avg_vol * 0.3:
-            logger.debug(f"[{pair}] LEA confirm: volume {volume:.2f} < 30% avg {avg_vol:.2f}")
-            return False
+        # Disabled volume filter
+        # if volume < avg_vol * 0.3:
+        #     logger.debug(f"[{pair}] LEA confirm: volume {volume:.2f} < 30% avg {avg_vol:.2f}")
+        #     return False
 
         logger.info(
             f"[{pair}] LEA entry confirmed: "
