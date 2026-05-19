@@ -1,0 +1,37 @@
+[Unit]
+Description=Freqtrade LeaFreqAI Strategy (Growth/Opportunity Focus)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=shad
+Group=shad
+WorkingDirectory=/home/shad/lea-freqai-system
+Environment="PATH=/home/shad/lea-freqai-system/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+EnvironmentFile=/home/shad/lea-freqai-system/.env
+
+ExecStart=/home/shad/lea-freqai-system/.venv/bin/python /home/shad/lea-freqai-system/run_freqtrade_patched.py trade \
+    --config /home/shad/lea-freqai-system/user_data/configs/config_lea.json \
+    --strategy LeaFreqAIStrategy \
+    --freqaimodel XGBoostRegressor \
+    --db-url sqlite:////home/shad/lea-freqai-system/user_data/tradesv3_lea.sqlite \
+    --logfile /home/shad/lea-freqai-system/logs/freqtrade_lea.log
+
+Restart=on-failure
+RestartSec=30
+StartLimitBurst=5
+StartLimitInterval=500
+KillSignal=SIGINT
+TimeoutStopSec=180
+SuccessExitStatus=130 143
+RestartPreventExitStatus=130 143
+
+MemoryLimit=2G
+CPUQuota=80%
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

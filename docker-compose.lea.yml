@@ -1,0 +1,17 @@
+---
+services:
+  freqtrade-lea:
+    image: freqtradeorg/freqtrade:stable_freqai
+    restart: unless-stopped
+    container_name: freqtrade-lea
+    volumes:
+      - "./user_data:/freqtrade/user_data"
+    ports:
+      - "127.0.0.1:8085:8080"
+    command: >
+      trade
+      --logfile /freqtrade/user_data/logs/freqtrade_lea.log
+      --db-url sqlite:////freqtrade/user_data/tradesv3_lea_v2.sqlite
+      --config /freqtrade/user_data/configs/config_lea.json
+      --strategy LeaFreqAIStrategy
+      --freqaimodel XGBoostRegressor

@@ -1,0 +1,28 @@
+[Unit]
+Description=Freqtrade FinAgent Strategy (Safety/Risk Management Focus)
+After=network.target
+
+[Service]
+Type=simple
+User=shad
+Group=shad
+WorkingDirectory=/home/shad/lea-freqai-system
+Environment="PATH=/home/shad/lea-freqai-system/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+EnvironmentFile=/home/shad/lea-freqai-system/.env
+
+ExecStart=/home/shad/lea-freqai-system/.venv/bin/python /home/shad/lea-freqai-system/run_freqtrade_patched.py trade \
+    --config /home/shad/lea-freqai-system/user_data/configs/config_finagent.json \
+    --strategy FinAgentStrategy_v2_RiskManaged \
+    --freqaimodel XGBoostRegressor \
+    --db-url sqlite:////home/shad/lea-freqai-system/user_data/tradesv3_finagent.sqlite \
+    --logfile /home/shad/lea-freqai-system/logs/finagent.log
+
+Restart=always
+RestartSec=10
+KillSignal=SIGINT
+TimeoutStopSec=180
+SuccessExitStatus=130 143
+RestartPreventExitStatus=130 143
+
+[Install]
+WantedBy=multi-user.target

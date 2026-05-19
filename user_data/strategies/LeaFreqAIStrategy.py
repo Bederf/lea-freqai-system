@@ -1,16 +1,18 @@
 """
-LEA FreqAI Strategy - Integrated Version
-LSTM Ensemble Algorithmic Trading Strategy
+LEA FreqAI Strategy - Clean Configuration
+Freqtrade FreqAI with XGBoostRegressor.
 
-Integrated features:
-- Pivot-based entry filtering (bullish bias, resistance avoidance)
-- Quantile-filtered ML entries (top 20% predictions only)
-- ATR-based dynamic stop-loss (tightens with profit)
-- Time-horizon exits (60 minutes max hold)
-- Pivot take-profit (R1) + partial TP signal
-- Exit priority: time > pivot TP > partial TP > hard stop
+Exit hierarchy (active):
+  1. ROI table exits  — primary exit system
+  2. Hard stoploss    — -5% catastrophic loss guard
 
-Based on: Deep Learning in Quantitative Trading (Zhang & Zohren, 2025)
+Guard mechanisms (DISABLED — do NOT re-enable):
+  - ATR custom_stoploss    — burned -$0.092/trade avg, 28min avg exit
+  - Time exit (custom_exit) — cut winners at market rate, -$0.123/trade avg
+  - Exit signal override    — replaced ROI with uncertain market rate exits
+  - Trailing stop           — -$1.36/trade avg across 242 trades
+
+See: user_data/configs/change_log.csv for config change audit trail.
 """
 import logging
 from datetime import timedelta
@@ -113,10 +115,10 @@ class LeaFreqAIStrategy(IStrategy):
 
     stoploss = -0.05
     trailing_stop = False
-    use_custom_stoploss = True   # Fixed: was False, ATR dynamic stop was bypassed
+    use_custom_stoploss = False   # Disabled: ATR stop fires too aggressively (avg 28min exits, -0.092 avg). Use only ROI table + 90-min time guard in custom_exit + hard -5% stoploss.
 
     # Exit settings
-    use_exit_signal = True     # Fixed: was False, custom_exit() was never called
+    use_exit_signal = False    # Disabled: custom_exit was cutting winners at market rate. ROI table handles all exits.
     exit_profit_only = False
     ignore_roi_if_entry_signal = False
 
@@ -460,8 +462,9 @@ class LeaFreqAIStrategy(IStrategy):
         current_profit: float,
         **kwargs,
     ) -> str | bool | None:
-        if current_time - trade.open_date_utc >= timedelta(minutes=90):
-            return "time_exit_90min"
+        # Disabled: ROI table handles all timing exits (guaranteed +0.5% at 90min).
+        # Hard -5% stoploss handles catastrophic losses. Time exit was cutting
+        # winners early at uncertain market rates (-$0.123 avg vs +$0.212 for ROI).
         return None
 
     def confirm_trade_entry(

@@ -57,8 +57,8 @@ class BanditMetaStrategy(IStrategy):
     # =====================================================================
     # TIME HORIZONS
     # =====================================================================
-    lea_max_hold_minutes = 60
-    hybrid_max_hold_minutes = 90
+    lea_max_hold_minutes = 240
+    hybrid_max_hold_minutes = 240
 
     # =====================================================================
     # PARTIAL TAKE-PROFIT (via early ROI tiers)
@@ -79,7 +79,7 @@ class BanditMetaStrategy(IStrategy):
         "120": 0.005, # 0.5% after 2 hours
     }
 
-    stoploss = -0.20
+    stoploss = -0.05
     trailing_stop = False
     use_custom_stoploss = True  # Enable for ATR-based dynamic stop
 
@@ -706,10 +706,9 @@ class BanditMetaStrategy(IStrategy):
     ) -> Optional[str]:
         """
         Trade-specific exit logic:
-        1. Hard time exit (60 min LEA, 90 min Hybrid/FinAgent) — no conditions
-        2. Pivot take-profit (R1 for LEA, R2 for Hybrid/FinAgent)
-        3. Partial take-profit signal at configured profit level
-        4. Hard stoploss guard at -3%
+        1. Hard time exit (240 min LEA/Hybrid) — no conditions
+        2. Partial take-profit signal at configured profit level
+        3. Hard stoploss guard at -3%
         """
         dataframe, _ = self.dp.get_analyzed_dataframe(pair, self.timeframe)
         if dataframe is None or dataframe.empty:
@@ -731,24 +730,17 @@ class BanditMetaStrategy(IStrategy):
                 return "time_exit_horizon"
 
         # =========================================================
-        # 2. PIVOT TAKE-PROFIT
+        # 2. PIVOT TAKE-PROFIT — removed (pivot levels below entry, causing losses)
         # =========================================================
-        if "lea" in tag:
-            if current_rate >= last["r1"]:
-                return "pivot_r1_take_profit"
-
-        if "hybrid" in tag or "finagent" in tag:
-            if current_rate >= last["r2"]:
-                return "pivot_r2_take_profit"
 
         # =========================================================
-        # 3. PARTIAL TAKE-PROFIT SIGNAL
+        # 2. PARTIAL TAKE-PROFIT SIGNAL
         # =========================================================
         if self.partial_tp_enabled and current_profit >= self.partial_tp_profit:
             return "partial_tp_early"
 
         # =========================================================
-        # 4. HARD STOPLOSS GUARD
+        # 3. HARD STOPLOSS GUARD
         # =========================================================
         if current_profit < -0.03:
             return "hard_stoploss_guard"

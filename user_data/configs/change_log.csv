@@ -3,8 +3,8 @@
 # Format: date, change_type, config_key, old_value, new_value, trial_trades, outcome, decision, notes
 
 date,change_type,config_key,old_value,new_value,trial_trades,outcome,decision,notes
-2026-05-06,fix,use_exit_signal,False,True,20,pending,pending,Fix: custom_exit bypassed. custom_stoploss now handles 90-min time exit.
-2026-05-06,fix,use_custom_stoploss,False,True,20,pending,pending,Fix: ATR dynamic stop was disabled. Now active.
+2026-05-08,fix,custom_exit_time_exit,active,disabled,20,in_progress,pending,Time exit cutting winners at market rate (-0.123 avg). ROI table already exits at 90min with guaranteed +0.5%. Hard -5% stoploss is the real loser-cutter.
+2026-05-06,fix,use_custom_stoploss,True,False,20,in_progress,pending,Disabled ATR stop — avg 28min exits, -0.092 avg loss. Clean mode: ROI + 90-min time guard + hard -5% stoploss
 # Past changes (pre-log)
 2026-03-XX,regression,use_custom_stoploss,False,True,?,bad,reverted,ATR stop re-enabled by mistake in commit 83de786. Resulted in -472% P&L across 399 trades.
 2026-03-XX,regression,use_exit_signal,False,True,?,bad,reverted,Exit signals re-enabled causing pivot R1 exits (+0.046% avg win vs -1.36% avg loss).
