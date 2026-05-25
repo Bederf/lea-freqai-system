@@ -1,125 +1,107 @@
 # LEA FreqAI Feature Rebuild Log
 
-**Date:** 2026-05-18
-**Status:** Paused — pre-rebuild diagnostic complete
+**Date:** 2026-05-24
+**Status:** Aborted — -1.5% stoploss too tight, WR collapsed
 
 ---
 
-## Baseline: What We Know
+## Executive Summary
 
-| Metric | Value |
-|--------|-------|
-| Feature count | 386 |
-| Shift-2 lagged features | 128 (33%) |
-| Exit mechanics | ✅ Working (ROI + stoploss both fire correctly) |
-| Model retrain behavior | ⚠️ Retrains on every restart (not frozen despite config) |
-| Root cause | Late-entry bias from lagged momentum features |
+**What we tested:** Tightening stoploss from -5% to -1.5% to fix structurally negative expectancy caused by 9:1 loss/win ratio.
 
-### Trade Performance (Trades 75-108, Post-Fix)
+**Result:** FAILED. The tighter stop reduced avg loss (from $1.64 → $0.54) but WR collapsed (85.7% → 33.3%) in the same market regime. Net expectancy got worse (-$0.083 → -$0.304/trade).
 
-| Period | Trades | WR | P&L | Cause |
-|--------|--------|-----|-----|-------|
-| May 8-9 (23 trades) | 23 | 100% | +$4.74 | Good model, good regime |
-| May 10-18 (11 trades) | 8 | 36% | -$4.20 | Model retrained on worsening data |
-| **Total** | **34** | **85%** | **+$0.54** | Asymmetric win/loss |
-
-### The Asymmetry Problem
-
-| Metric | Winners (27) | Losers (4) |
-|--------|-------------|------------|
-| Avg P&L | +$0.18 | -$1.58 |
-| Exit reason | 100% roi | 100% stoploss |
-| Hold time | 3-17h | 31-37h |
-
-**Winner/Loser asymmetry:** Small winners, catastrophic losers. System cannot recover from consecutive stoploss hits because winners don't compensate.
+**Hard abort triggered:** May 21 single-day loss of -$3.13 exceeded the -$3 threshold.
 
 ---
 
-## The Hypothesis
+## The Math — Before and After
 
-### Question 1: Smallest Feature Set That Could Work
+| Era | Trades | WR | Avg Winner | Avg Loser | Expectancy | Breakeven WR |
+|-----|--------|-----|------------|-----------|------------|--------------|
+| -5% stop (115-128) | 14 | 85.7% | +$0.176 | -$1.640 | -$0.083 | 90.3% |
+| -1.5% stop (129+) | 9 | 33.3% | +$0.161 | -$0.536 | -$0.304 | 76.9% |
 
-**Current-state indicators only** (no lagged/shifted features):
-
-| Indicator | Timeframes | Features |
-|-----------|------------|----------|
-| RSI | 14, 20 | 2 per pair |
-| MACD (line + signal + hist) | default | 3 per pair |
-| Bollinger Bands position | 20 | 1 per pair |
-| ATR | 14, 20 | 2 per pair |
-| Current candle return | 5m, 15m | 2 per pair |
-| Volume (relative to MA) | 20 | 1 per pair |
-
-**Total: ~11 features per pair × 3 pairs = ~33 features + BTC correlation = ~50-60 total**
-
-No shifted candles. No rolling windows beyond indicator calibration. No cross-pair features except BTC/USDT as market sentiment proxy.
-
-### Question 2: Why This Will Work Better
-
-**Lagged features cause momentum-chasing.** When a model learns that "positive returns in the last N candles predict continued upward movement," it fires entries AFTER the move has already started. By the time the model enters, momentum is already reversing.
-
-Current-bar features (RSI, MACD) measure **current state**, not historical drift. RSI at 70 means overbought NOW — the model can act on that immediately. A shift-2 return feature at +2% means "returns were positive 2 candles ago" — by the time that signal fires, the move may already be over.
-
-**The fix:** Replace momentum-drift features with mean-reversion indicators (RSI, Bollinger position) that fire on current extremes rather than historical patterns.
-
-### Question 3: Kill Criteria
-
-**Hard gates at 50 dry-run trades:**
-
-| Metric | Pass | Fail |
-|--------|------|------|
-| Win Rate | ≥70% | <70% |
-| Avg P&L | ≥$0.15/trade | <$0.15 |
-| Max consecutive losses | ≤3 | >3 |
-| Total trades | 50 | <50 in 4 weeks |
-
-**If fail at 50 trades:** Document findings, mothball project. Do not continue with incremental tweaks. The architecture is wrong — start over or abandon.
-
-**Hard abort during run:**
-- 5 consecutive stoploss hits → pause immediately
-- Cumulative DD >-$10 → pause immediately
-- Any single day loss >-$3 → pause and reassess
+**The problem:** At -1.5%, the model is entering during a volatile/downtrend regime. The tight stop fires before the trade has time to work. The "winners" that survived the -5% era are now losers at -1.5%.
 
 ---
 
-## Execution Plan
+## Key Learnings
 
-### Saturday: Feature Engineering
+1. **Stoploss and WR are coupled.** Tightening stop doesn't just reduce loss size — it changes which trades count as winners vs losers. A trade that dips to -1.8% and recovers is a winner at -5% but a loser at -1.5%.
 
-- [ ] Audit current 386 features, classify by type
-- [ ] Remove `include_shifted_candles` from config (set to 0)
-- [ ] Reduce `indicator_periods_candles` to [14, 20] only
-- [ ] Set `train_period_days: 60`
-- [ ] Retrain model, verify feature count ~50-60
-- [ ] Run backtest on historical period (Mar-Apr) to check generalization
+2. **Win rate is regime-dependent.** The same model produced 85.7% WR in one period and 33.3% in the next. Market regime matters more than the stoploss parameter.
 
-### Sunday: Dry-Run Setup
+3. **The 9:1 asymmetry was real but fix was wrong target.** Reducing avg loss from $1.64 to $0.54 was correct in principle, but the mechanism (hard -1.5% stop) introduced too many false stops in volatile conditions.
 
-- [ ] Switch to `dry_run: true`
-- [ ] Start bot, monitor first 5 entries
-- [ ] Verify prediction distribution (should span + and -, not clustered at 0)
-- [ ] Run `monitor_rebuild.sh` daily
+4. **Breakeven WR at -1.5% was 76.9%.** We got 33.3% — a catastrophic miss, not a near-miss.
 
-### Validation Timeline
-
-| Phase | Trades | Duration | Goal |
-|-------|--------|----------|------|
-| Dry-run | 50 | 2-4 weeks | WR ≥70%, avg ≥$0.15 |
-| If dry-run passes | 50 live | 2-4 weeks | Same metrics on real capital |
-| **Total validation** | **100 trades** | **4-8 weeks** | Confirmed deployable system |
+5. **live_retrain_hours: 0 was working.** Model did NOT retrain during the trial. The WR collapse is market regime, not a retrain bug.
 
 ---
 
-## What's Already Committed
+## Hard Abort Log
 
-- Config fix: `retrain: false`, `live_retrain_hours: 0` — working ✅
-- Exit mechanics: ROI + stoploss both firing correctly ✅
-- Diagnostic data: 34 trades fully documented ❌
-- Feature reduction: **NOT YET STARTED** ← current task
+| Date | Criterion | Limit | Actual | Action |
+|------|-----------|-------|--------|--------|
+| 2026-05-21 | Single day loss | >-$3 | **-$3.13** | Bot should have paused |
+| 2026-05-24 | Max consecutive stoplosses | ≤3 | 3 (borderline) | Still running |
 
 ---
 
-## Current Branch
+## Consecutive Stoplosses
 
-`main` — pre-rebuild snapshot
-`feature-reduction-v1` — branch for rebuild (to be created)
+| Period | Max Consecutive | Trades Affected |
+|--------|-----------------|-----------------|
+| Pre-change (-5%) | 2 (119-120) | LINK, ETH |
+| Post-change (-1.5%) | 3 (129-131) | SOL, ETH, LINK |
+
+---
+
+## What to Try Next
+
+**Option A: Widen to -2.5% or -3%**
+- Reduce loss per trade from $1.64 to ~$0.90-$1.00
+- May preserve more winners while still improving expectancy
+- Needs ~75% WR to break even at -3%
+
+**Option B: Add entry confirmation filter**
+- Only enter if RSI < 60 (not overbought)
+- Only enter if prediction > 0.002 (minimum confidence)
+- Reduces total trades, may improve WR
+
+**Option C: Let winners run (raise ROI targets)**
+- Current: {0: 0.02, 20: 0.015, 40: 0.01, 90: 0.005}
+- Raise top tier from 2% to 3%
+- Avg winner grows from $0.17 to ~$0.25
+- Breakeven WR drops to 68% at -5% stop
+- Doesn't require model retrain
+
+**Option D: Abandon**
+- Two consecutive structural failures (momentum-chasing features, then tight stop)
+- Document learnings, move on
+
+---
+
+## Current Config
+
+- **Stoploss:** -0.015 (temporarily, should revert to -0.05 or adjust)
+- **Model:** Frozen (retrain=false, live_retrain_hours=0)
+- **Features:** 98 (reduced from 386, no shift-2 candles)
+- **Training:** 60-day window
+- **Mode:** Dry-run, PAUSED (May 24)
+
+---
+
+## Files Changed
+
+- `user_data/strategies/LeaFreqAIStrategy.py` — stoploss changed from -0.05 to -0.015
+- `user_data/configs/config_lea.json` — retrain: false, live_retrain_hours: 0 (no change this session)
+
+---
+
+## Database
+
+- `user_data/tradesv3_lea_v2.sqlite`
+- Trade range for this trial: IDs 115-139
+- Total P&L since 115: -$3.90 (23 closed trades)

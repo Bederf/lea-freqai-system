@@ -113,9 +113,9 @@ class LeaFreqAIStrategy(IStrategy):
         "90": 0.005,  # 0.5% after 1.5 hours
     }
 
-    stoploss = -0.05
+    stoploss = -0.015   # Tightened from -0.05 (May 24). At -5% avg loss was $1.64, expectancy -$0.15. -1.5% reduces avg loss to ~$0.45, breakeven WR drops from 89% to 72%. Current WR 81.8% is above breakeven — expectancy projected +$0.06/trade if WR holds.
     trailing_stop = False
-    use_custom_stoploss = False   # Disabled: ATR stop fires too aggressively (avg 28min exits, -0.092 avg). Use only ROI table + 90-min time guard in custom_exit + hard -5% stoploss.
+    use_custom_stoploss = False   # Disabled: ATR stop burned avg -$0.092/trade. Hard -1.5% stoploss handles catastrophic losses.
 
     # Exit settings
     use_exit_signal = False    # Disabled: custom_exit was cutting winners at market rate. ROI table handles all exits.
