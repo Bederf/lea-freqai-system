@@ -1,7 +1,7 @@
 # LEA FreqAI Feature Rebuild Log
 
-**Date:** 2026-05-24
-**Status:** Aborted — -1.5% stoploss too tight, WR collapsed
+**Date:** 2026-05-25
+**Status:** Paused — -1.5% stop test failed, reverted to -5%, bot restarted
 
 ---
 
@@ -60,7 +60,7 @@
 
 ## What to Try Next
 
-**Option A: Widen to -2.5% or -3%**
+**Option A: Widen to -2.5% or -3% (NOT YET TESTED)**
 - Reduce loss per trade from $1.64 to ~$0.90-$1.00
 - May preserve more winners while still improving expectancy
 - Needs ~75% WR to break even at -3%
@@ -83,13 +83,13 @@
 
 ---
 
-## Current Config
+## Current Config (May 25)
 
-- **Stoploss:** -0.015 (temporarily, should revert to -0.05 or adjust)
+- **Stoploss:** -0.05 (REVERTED from -0.015 — too tight)
 - **Model:** Frozen (retrain=false, live_retrain_hours=0)
 - **Features:** 98 (reduced from 386, no shift-2 candles)
 - **Training:** 60-day window
-- **Mode:** Dry-run, PAUSED (May 24)
+- **Mode:** Dry-run, RUNNING
 
 ---
 
