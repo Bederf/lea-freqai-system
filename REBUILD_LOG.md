@@ -1,7 +1,7 @@
 # LEA FreqAI Feature Rebuild Log
 
 **Date:** 2026-05-25
-**Status:** Paused — -1.5% stop test failed, reverted to -5%, bot restarted
+**Status:** MOTHBALLED — expectancy -$0.122/trade, kill criteria hit
 
 ---
 
@@ -85,23 +85,52 @@
 
 ## Current Config (May 25)
 
-- **Stoploss:** -0.05 (REVERTED from -0.015 — too tight)
+- **Stoploss:** -0.05 (final config)
 - **Model:** Frozen (retrain=false, live_retrain_hours=0)
 - **Features:** 98 (reduced from 386, no shift-2 candles)
 - **Training:** 60-day window
-- **Mode:** Dry-run, RUNNING
+- **Mode:** Dry-run, STOPPED
 
 ---
 
 ## Files Changed
 
-- `user_data/strategies/LeaFreqAIStrategy.py` — stoploss changed from -0.05 to -0.015
-- `user_data/configs/config_lea.json` — retrain: false, live_retrain_hours: 0 (no change this session)
+- `user_data/strategies/LeaFreqAIStrategy.py` — stoploss: -0.05
+- `user_data/configs/config_lea.json` — retrain: false, live_retrain_hours: 0
 
 ---
 
 ## Database
 
 - `user_data/tradesv3_lea_v2.sqlite`
-- Trade range for this trial: IDs 115-139
-- Total P&L since 115: -$3.90 (23 closed trades)
+- Trade range for this trial: IDs 115-144
+- Total P&L since 115: -$3.28 (27 closed trades)
+
+---
+
+## May 25 Kill Decision
+
+**Status: MOTHBALLED**
+
+| Metric | Value | Kill Threshold |
+|--------|-------|----------------|
+| Trades | 27 | 50 (shortened) |
+| Win Rate | 70.4% | ≥70% (barely) |
+| Avg Winner | +$0.169 | — |
+| Avg Loser | -$0.812 | — |
+| Expectancy | **-$0.122/trade** | ≥$0.10/trade |
+| Gap to breakeven | 12.4 points WR | — |
+
+**Root cause:** Payoff asymmetry. $0.81 avg loss vs $0.17 avg win requires 82.8% WR to break even. Current WR is 70.4%.
+
+**What was tested:**
+- Feature reduction (386→98) — working, reduced momentum-chasing ✅
+- Stoploss -5% → -1.5% — reduced avg loss ($1.64→$0.54) but WR collapsed ❌
+- Model freeze (retrain=false) — working, no auto-retrain ✅
+- Bot infrastructure — working ✅
+
+**What was never cleanly tested:** -1.5% stop + 3% ROI top tier together. That config has theoretical positive expectancy but was never validated end-to-end.
+
+**The one untested config:** 60-day training + 60-80 current-bar features + -1.5% stop + 3% top ROI tier. That's the rebuild if this project is ever resumed.
+
+**Trial net result:** -$3.28 on 27 trades. Not a failure of the infrastructure — a failure of the payoff structure.
