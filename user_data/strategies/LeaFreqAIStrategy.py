@@ -107,13 +107,13 @@ class LeaFreqAIStrategy(IStrategy):
     # ROI & STOPLOSS
     # =====================================================================
     minimal_roi = {
-        "0": 0.02,    # 2% immediate profit
-        "20": 0.015,  # 1.5% after 20 min
-        "40": 0.01,   # 1% after 40 min
+        "0": 0.03,    # 3% immediate profit (raised from 2% — May 25 test)
+        "20": 0.02,   # 2% after 20 min
+        "40": 0.015,  # 1.5% after 40 min
         "90": 0.005,  # 0.5% after 1.5 hours
     }
 
-    stoploss = -0.015   # Tightened from -0.05 (May 24). At -5% avg loss was $1.64, expectancy -$0.15. -1.5% reduces avg loss to ~$0.45, breakeven WR drops from 89% to 72%. Current WR 81.8% is above breakeven — expectancy projected +$0.06/trade if WR holds.
+    stoploss = -0.015   # Tightened from -0.05 (May 25). Combined with 3% ROI top tier.
     trailing_stop = False
     use_custom_stoploss = False   # Disabled: ATR stop burned avg -$0.092/trade. Hard -1.5% stoploss handles catastrophic losses.
 
