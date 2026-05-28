@@ -1,7 +1,7 @@
 # LEA FreqAI Feature Rebuild Log
 
-**Date:** 2026-05-25
-**Status:** MOTHBALLED — expectancy -$0.122/trade, kill criteria hit
+**Date:** 2026-05-28
+**Status:** MOTHBALLED — project complete, all experiments done
 
 ---
 
