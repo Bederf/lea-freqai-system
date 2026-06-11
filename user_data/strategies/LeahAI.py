@@ -430,9 +430,9 @@ class LeahAIStrategy(IStrategy):
             return dataframe
 
         conditions = [
-            # 1. Model confidence > 55% on the current candle only.
-            # confirm_trade_entry enforces the same current-row check; both gates now measure identical state.
-            (dataframe[1].iloc[-1] > self.ml_entry_probability if 1 in dataframe.columns else dataframe["&-target"].iloc[-1] > self.ml_entry_probability),
+            # 1. Model confidence > 55%, vectorized per-row. Live loop reads last row; backtests get correct per-candle values.
+            # Fail closed if column 1 missing — &-target is a 0/1 label, not a probability; comparing it to 0.55 silently passes label=1.
+            (dataframe[1] > self.ml_entry_probability if 1 in dataframe.columns else pd.Series(False, index=dataframe.index)),
 
             # 2. BTC bull regime (continuous, not binary)
             dataframe["%btc_trend"] >= 0.002,
