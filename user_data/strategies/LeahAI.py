@@ -461,7 +461,8 @@ class LeahAIStrategy(IStrategy):
         cond3 = dataframe["close"].iloc[-1] > dataframe["ema_50"].iloc[-1] if "ema_50" in dataframe.columns else False
         cond4 = dataframe["do_predict"].iloc[-1] == 1 if "do_predict" in dataframe.columns else False
         cond5 = dataframe["volume"].iloc[-1] > 0 if "volume" in dataframe.columns else False
-        logger.warning(f"[{metadata['pair']}] entry check: prob={dataframe[1].iloc[-1]:.4f} vs {self.ml_entry_probability}, cond1={cond1}, cond2={cond2}, cond3={cond3}, cond4={cond4}, cond5={cond5}")
+        _prob = dataframe[1].iloc[-1] if 1 in dataframe.columns else float("nan")
+        logger.warning(f"[{metadata['pair']}] entry check: prob={_prob:.4f} vs {self.ml_entry_probability}, cond1={cond1}, cond2={cond2}, cond3={cond3}, cond4={cond4}, cond5={cond5}")
 
         # Debug: log entry signal status
         if dataframe["enter_long"].iloc[-1]:
