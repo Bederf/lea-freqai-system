@@ -121,3 +121,6 @@ user_data/strategies/.archive/
 
 docker-compose-*.yml
 room_monitoring/
+
+# Strategy files
+!user_data/strategies/LeahAI.py
