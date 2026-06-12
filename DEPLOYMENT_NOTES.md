@@ -10,22 +10,25 @@
 
 | Fix | Location | Description |
 |-----|----------|-------------|
-| Entry condition — current row only | Line 481 | `dataframe[1].iloc[-1] > 0.55` — strictly last row, no latch, no rolling window |
+| Entry condition — current row only | Line 481 | `dataframe["1"].iloc[-1] > 0.55` — strictly last row, no latch, no rolling window |
 | FreqAI predict() override | Lines 326-354 | Bypass broken XGBoostClassifier LabelEncoder chain via BaseClassifierModel.predict directly |
+| String column names in predict() | Line 364 | `pred_df.columns = [str(c) for c in pred_df.columns]` — data_drawer expects string '0'/'1', not int |
 | Confirm entry — read probability | Line 557 | `signal_candle[1]` — reads col 1 (positive-class prob), not `&-target` label |
 | BTC trend hard gate | Lines 566-567 | Deny entry if `btc_trend < 0.002` |
 | 6h negative-profit time exit | Lines 527-528 | Hard exit after 360 min if unrealized P&L < 0 |
 | Confirm exit — read probability | Line 607 | `signal_candle[1]` — same column fix for exit path |
 
-### 2. FreqTrade internal (baked into `2026.4_freqai` image — NOT on host tree)
+### 2. FreqTrade internal — live container patches (ephemeral, wiped on restart)
 
 | File | Fix | Notes |
 |------|-----|-------|
+| `data_drawer.py` lines 304-305 | `pd.to_datetime(..., utc=True)` | Pandas 2.x compatibility — Mixed timezone error |
 | `data_drawer.py` lines 368-369 | `labels_std` existence guard | Prevents KeyError if key absent |
-| `XGBoostClassifier.py` lines 79-81 | Bypass label encode/rename | Removes LabelEncoder chain that caused `ValueError: y contains previously unseen labels: [1]` |
+| `XGBoostClassifier.py` lines 79-81 | Bypass label encode/rename | Removes LabelEncoder chain causing `ValueError: y contains previously unseen labels: [1]` |
 | `data_kitchen.py` line 904 | `is_string_dtype` guard | Prevents int/str mismatch in `remove_features_from_df` |
+| `freqai_interface.py` line 928 | `pd.to_datetime(..., utc=True)` | Pandas 2.x compatibility — Mixed timezone error |
 
-**Important:** Host patches to `/home/shad/.../freqtrade/freqai/` are never loaded by the container. The container uses its own image-installed packages at `/freqtrade/freqtrade/`. All internal fixes are baked into the `2026.4_freqai` image and verified present.
+**Important:** These patches are applied to the running container's image filesystem. They are NOT in the host source tree and are NOT baked into any image tag. They will be wiped on `docker compose down -v` or image update. To survive restarts: add them to a Dockerfile derived from `2026.4_freqai`, or use a startup script that patches on container boot.
 
 ---
 
