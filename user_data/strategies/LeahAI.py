@@ -353,11 +353,15 @@ class LeahAIStrategy(IStrategy):
         pred_df, dk.do_predict = BaseClassifierModel.predict(self, unfiltered_df, dk, **kwargs)
 
         # pred_df columns: ['&-target', 0, 1]
-        #   '&-target' = raw 0/1 from model.predict()
+        #   '&-target' = raw 0/1 predictions (unused by entry gate)
         #   0 = P(class=0), 1 = P(class=1)  <- entry gate reads column 1
         # Drop corrupted '&-target' column, keep probability columns
         if '&-target' in pred_df.columns:
             pred_df = pred_df.drop(columns=['&-target'])
+
+        # Rename integer cols to strings — data_drawer.py line 355 uses
+        # df.columns.get_loc(label) with string '0'/'1', not int 0/1
+        pred_df.columns = [str(c) for c in pred_df.columns]
 
         return pred_df, dk.do_predict
 
