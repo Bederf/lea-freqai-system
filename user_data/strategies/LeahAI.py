@@ -384,10 +384,10 @@ class LeahAIStrategy(IStrategy):
             dataframe = self.freqai.start(dataframe, metadata, self)
             # Debug: log what FreqAI actually returned
             _cols = list(dataframe.columns)
-            _has_1 = 1 in dataframe.columns
+            _has_1 = "1" in dataframe.columns
             _has_target = "&-target" in dataframe.columns
             _do_pred = dataframe["do_predict"].iloc[-1] if "do_predict" in dataframe.columns else -1
-            _pred_val = dataframe[1].iloc[-1] if _has_1 else float("nan")
+            _pred_val = dataframe["1"].iloc[-1] if _has_1 else float("nan")
             logger.warning(f"[{metadata.get('pair')}] freqai.start done — col1={_has_1}, do_predict={_do_pred}, pred={_pred_val:.4f}, cols={len(_cols)}, DI_vals={dataframe['DI_values'].iloc[-1] if 'DI_values' in dataframe.columns else -1}")
         except Exception as exc:
             pair = metadata.get("pair", "UNKNOWN")
@@ -433,8 +433,8 @@ class LeahAIStrategy(IStrategy):
 
         # Diagnostic logging — fail silently on missing columns
         try:
-            if 1 in dataframe.columns:
-                prob = dataframe[1]  # col "1" = model P(vol expansion), not&-target (training label)
+            if "1" in dataframe.columns:
+                prob = dataframe["1"]  # col "1" = model P(vol expansion), not &-target (training label)
                 btc_trend = float(dataframe["%btc_trend"].iloc[-1]) if "%btc_trend" in dataframe.columns and not pd.isna(dataframe["%btc_trend"].iloc[-1]) else 0.0
                 above_ema50 = bool((dataframe["close"].iloc[-1] > dataframe["ema_50"].iloc[-1]) if "ema_50" in dataframe.columns and not pd.isna(dataframe["ema_50"].iloc[-1]) else False)
                 do_predict_val = dataframe["do_predict"].iloc[-1] if "do_predict" in dataframe.columns else 'N/A'
@@ -482,7 +482,7 @@ class LeahAIStrategy(IStrategy):
         conditions = [
             # 1. Model confidence > 55%, vectorized per-row. Live loop reads last row; backtests get correct per-candle values.
             # Fail closed if column 1 missing — &-target is a 0/1 label, not a probability; comparing it to 0.55 silently passes label=1.
-            (dataframe[1] > self.ml_entry_probability if 1 in dataframe.columns else pd.Series(False, index=dataframe.index)),
+            (dataframe["1"] > self.ml_entry_probability if "1" in dataframe.columns else pd.Series(False, index=dataframe.index)),
 
             # 2. BTC bull regime (continuous, not binary)
             dataframe["%btc_trend"] >= 0.002,
@@ -506,12 +506,12 @@ class LeahAIStrategy(IStrategy):
         dataframe.loc[entry_signal, "enter_long"] = 1
 
         # Debug: log each condition's last-row result
-        cond1 = dataframe[1].iloc[-1] > self.ml_entry_probability if 1 in dataframe.columns else False
+        cond1 = dataframe["1"].iloc[-1] > self.ml_entry_probability if "1" in dataframe.columns else False
         cond2 = dataframe["%btc_trend"].iloc[-1] >= 0.002 if "%btc_trend" in dataframe.columns else False
         cond3 = dataframe["close"].iloc[-1] > dataframe["ema_50"].iloc[-1] if "ema_50" in dataframe.columns else False
         cond4 = dataframe["do_predict"].iloc[-1] == 1 if "do_predict" in dataframe.columns else False
         cond5 = dataframe["volume"].iloc[-1] > 0 if "volume" in dataframe.columns else False
-        _prob = dataframe[1].iloc[-1] if 1 in dataframe.columns else float("nan")
+        _prob = dataframe["1"].iloc[-1] if "1" in dataframe.columns else float("nan")
         logger.warning(f"[{metadata['pair']}] entry check: prob={_prob:.4f} vs {self.ml_entry_probability}, cond1={cond1}, cond2={cond2}, cond3={cond3}, cond4={cond4}, cond5={cond5}")
 
         # Debug: log entry signal status
