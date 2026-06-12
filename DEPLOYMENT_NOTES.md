@@ -10,7 +10,8 @@
 
 | Fix | Location | Description |
 |-----|----------|-------------|
-| Entry condition spike detection | Line 436 | `dataframe[1].max()` — fires on any row exceeding 0.55 in lookback window |
+| Entry condition — current row only | Line 481 | `dataframe[1].iloc[-1] > 0.55` — strictly last row, no latch, no rolling window |
+| FreqAI predict() override | Lines 326-354 | Bypass broken XGBoostClassifier LabelEncoder chain via BaseClassifierModel.predict directly |
 | Confirm entry — read probability | Line 557 | `signal_candle[1]` — reads col 1 (positive-class prob), not `&-target` label |
 | BTC trend hard gate | Lines 566-567 | Deny entry if `btc_trend < 0.002` |
 | 6h negative-profit time exit | Lines 527-528 | Hard exit after 360 min if unrealized P&L < 0 |
@@ -87,7 +88,7 @@ After any model delete/retrain:
 - **Database:** tradesv3_lea_v2.sqlite
 - **Validation goal:** ≥$0.10 expectancy per trade over 50 trades
 - **Kill criterion:** <$0.05 expectancy
-- **Current:** 0 trades — pipeline clean, awaiting BTC trend push above 0.002 threshold with supporting probability
+- **Current:** 3/50 closed (trades 10-12, all ROI), expectancy tracking live. Design decision: current-row only entry condition (no spike latch, no rolling window) — committed and synced to container.
 
 ---
 
