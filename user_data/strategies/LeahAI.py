@@ -323,6 +323,45 @@ class LeahAIStrategy(IStrategy):
     # Positive rate: 31.8% — balanced for binary classification
     # FreqAI XGBoost does NOT auto-binarize — must be explicit here.
     # =========================================================================
+    # FREQAI PREDICTION OVERRIDE
+    # FreqAI 2026.4's XGBoostClassifier.predict() has a bug: it fits a
+    # LabelEncoder on column names (['&-target']) instead of actual label values,
+    # so classes_=[0] while the model predicts [0,1]. inverse_transform([1])
+    # then raises ValueError. Override uses the model's own classes_ directly.
+    # =========================================================================
+
+    def predict(self, unfiltered_df, dk, **kwargs):
+        """
+        Override to bypass FreqAI 2026.4's broken XGBoostClassifier.predict() LabelEncoder.
+
+        The base class (BaseClassifierModel.predict) returns:
+          pred_df with columns ['&-target', 0, 1]:
+            '&-target': raw 0/1 predictions (unused by entry gate)
+            0: P(class=0) from model.predict_proba
+            1: P(class=1) from model.predict_proba  <- column 1, used for entry
+
+        XGBoostClassifier.predict() then calls inverse_transform() using a
+        LabelEncoder fit on column names ['&-target'], producing classes_=[0].
+        When model predicts class 1, inverse_transform([1]) raises:
+          ValueError: y contains previously unseen labels: [1]
+
+        This override calls base predict, extracts probability columns (0, 1),
+        and skips the broken encoder entirely.
+        """
+        from freqtrade.freqai.base_models.BaseClassifierModel import BaseClassifierModel
+
+        pred_df, dk.do_predict = BaseClassifierModel.predict(self, unfiltered_df, dk, **kwargs)
+
+        # pred_df columns: ['&-target', 0, 1]
+        #   '&-target' = raw 0/1 from model.predict()
+        #   0 = P(class=0), 1 = P(class=1)  <- entry gate reads column 1
+        # Drop corrupted '&-target' column, keep probability columns
+        if '&-target' in pred_df.columns:
+            pred_df = pred_df.drop(columns=['&-target'])
+
+        return pred_df, dk.do_predict
+
+    # =========================================================================
 
     def set_freqai_targets(self, dataframe: DataFrame, metadata: dict, **kwargs) -> DataFrame:
         # Compute ATR here since it may not be populated before set_freqai_targets is called
@@ -339,6 +378,13 @@ class LeahAIStrategy(IStrategy):
     def populate_indicators(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         try:
             dataframe = self.freqai.start(dataframe, metadata, self)
+            # Debug: log what FreqAI actually returned
+            _cols = list(dataframe.columns)
+            _has_1 = 1 in dataframe.columns
+            _has_target = "&-target" in dataframe.columns
+            _do_pred = dataframe["do_predict"].iloc[-1] if "do_predict" in dataframe.columns else -1
+            _pred_val = dataframe[1].iloc[-1] if _has_1 else float("nan")
+            logger.warning(f"[{metadata.get('pair')}] freqai.start done — col1={_has_1}, do_predict={_do_pred}, pred={_pred_val:.4f}, cols={len(_cols)}, DI_vals={dataframe['DI_values'].iloc[-1] if 'DI_values' in dataframe.columns else -1}")
         except Exception as exc:
             pair = metadata.get("pair", "UNKNOWN")
             import traceback
