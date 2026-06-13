@@ -1,0 +1,117 @@
+{
+  "$schema": "https://schema.freqtrade.io/schema.json",
+  "max_open_trades": 3,
+  "stake_currency": "USDT",
+  "stake_amount": 30,
+  "tradable_balance_ratio": 0.99,
+  "fiat_display_currency": "USD",
+  "timeframe": "5m",
+  "dry_run": true,
+  "cancel_open_orders_on_exit": false,
+  "unfilledtimeout": {
+    "entry": 10,
+    "exit": 10,
+    "exit_timeout_count": 0,
+    "unit": "minutes"
+  },
+  "entry_pricing": {
+    "price_side": "other",
+    "use_order_book": true,
+    "order_book_top": 1,
+    "price_last_balance": 0.0,
+    "check_depth_of_market": {
+      "enabled": false,
+      "bids_to_ask_delta": 1
+    }
+  },
+  "exit_pricing": {
+    "price_side": "other",
+    "use_order_book": true,
+    "order_book_top": 1
+  },
+  "exchange": {
+    "name": "binance",
+    "key": "N8GHTNVZ8aJc8Fdii4kmDZkSAmPJw4IvX91v4mXSNAC2BenHzyilcujmQ3TRZbub",
+    "secret": "9lBDwYpL384O7HDuORUvDWzwTmBeOJY6uLs9fnQW5aRuUlwcKVJu2omlZIkzQqbs",
+    "ccxt_config": {},
+    "ccxt_async_config": {},
+    "pair_whitelist": [
+      "LINK/USDT",
+      "ETH/USDT",
+      "SOL/USDT"
+    ],
+    "pair_blacklist": [
+      "BNB/.*"
+    ]
+  },
+  "pairlists": [
+    {
+      "method": "StaticPairList"
+    }
+  ],
+  "telegram": {
+    "enabled": true,
+    "token": "8476186230:AAGbCZa271XYhWKyKl5thcT97lVx_EFjqqc",
+    "chat_id": "8359288792"
+  },
+  "api_server": {
+    "enabled": true,
+    "listen_ip_address": "0.0.0.0",
+    "listen_port": 8081,
+    "verbosity": "error",
+    "jwt_secret_key": "84312ad80c27693794efc52c671240030ad6a3193cbdf23efb17f221d36d12bd",
+    "CORS_origins": [],
+    "username": "admin",
+    "password": "f9l4fHChq8ky6HYY6ZKibw=="
+  },
+  "bot_name": "LeaFreqAI",
+  "initial_state": "running",
+  "force_entry_enable": true,
+  "internals": {
+    "process_throttle_secs": 5
+  },
+  "freqaimodel": "XGBoostClassifier",
+  "freqai": {
+    "enabled": true,
+    "purge_old_models": 5,
+    "train_period_days": 60,
+    "live_retrain_hours": 999,
+    "identifier": "leah_v2",
+    "fit_live_predictions_candles": 0,
+    "feature_parameters": {
+      "include_timeframes": [
+        "5m"
+      ],
+      "include_corr_pairlist": [
+        "BTC/USDT"
+      ],
+      "label_period_candles": 12,
+      "include_shifted_candles": 0,
+      "DI_threshold": 0,
+      "weight_factor": 0.9,
+      "principal_component_analysis": false,
+      "use_SVM_to_remove_outliers": false,
+      "indicator_periods_candles": [
+        14
+      ]
+    },
+    "data_split_parameters": {
+      "test_size": 0.25,
+      "shuffle": false
+    },
+    "model_training_parameters": {
+      "n_estimators": 200,
+      "learning_rate": 0.05,
+      "max_depth": 4,
+      "subsample": 0.8,
+      "colsample_bytree": 0.8,
+      "reg_lambda": 0.1,
+      "reg_alpha": 0.0,
+      "min_child_weight": 5,
+      "objective": "binary:logistic",
+      "eval_metric": "logloss",
+      "scale_pos_weight": 2.14
+    }
+  },
+  "identifier": "leah_v4_3"
+}
