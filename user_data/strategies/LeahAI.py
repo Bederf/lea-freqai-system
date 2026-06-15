@@ -603,7 +603,7 @@ class LeahAIStrategy(IStrategy):
             return False
 
         # Gate 1: probability threshold
-        prob = float(signal_candle[1])
+        prob = float(signal_candle["1"])
         if prob <= self.ml_entry_probability:
             logger.warning(
                 f"[{pair}] confirm DENIED: prob={prob:.4f} <= {self.ml_entry_probability}"
@@ -653,6 +653,6 @@ class LeahAIStrategy(IStrategy):
         if "1" not in dataframe.columns:
             return proposed_stake
 
-        prob = float(signal_candle[1])
+        prob = float(signal_candle["1"])
         confidence_multiplier = np.clip(1.0 + (prob - self.ml_entry_probability) * 2.5, 0.5, 1.5)
         return np.clip(proposed_stake * confidence_multiplier, min_stake, max_stake)
