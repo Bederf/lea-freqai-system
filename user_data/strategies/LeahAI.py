@@ -468,14 +468,10 @@ class LeahAIStrategy(IStrategy):
           - btc_regime_bull filter replaced with %btc_trend (continuous)
           - RSI < 70 gate removed (overbought consistent with vol expansion)
         """
-        if "&-target" not in dataframe.columns:
-            logger.warning(f"[{metadata['pair']}] No &-target column — no entries")
-            dataframe["enter_long"] = 0
-            return dataframe
-
         # Guard: require %btc_trend column (created by feature_engineering_standard)
         # If missing (FreqAI fallback active or feature engineering failed), deny entries
         if "%btc_trend" not in dataframe.columns:
+            logger.warning(f"[{metadata['pair']}] No %btc_trend column — no entries")
             dataframe["enter_long"] = 0
             return dataframe
 
@@ -600,7 +596,10 @@ class LeahAIStrategy(IStrategy):
 
         signal_candle = _get_latest_signal_candle(dataframe)
 
-        if "&-target" not in dataframe.columns:
+        # Guard: require column "1" (model probability) — &-target was dropped by predict()
+        # to avoid LabelEncoder corruption, but confirm_trade_entry gates on prob, not the label
+        if "1" not in dataframe.columns:
+            logger.warning(f"[{pair}] No probability column — no entries")
             return False
 
         # Gate 1: probability threshold
@@ -651,7 +650,7 @@ class LeahAIStrategy(IStrategy):
             return proposed_stake
 
         signal_candle = _get_latest_signal_candle(dataframe)
-        if "&-target" not in dataframe.columns:
+        if "1" not in dataframe.columns:
             return proposed_stake
 
         prob = float(signal_candle[1])
