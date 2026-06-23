@@ -123,7 +123,7 @@ class LeahAIStrategy(IStrategy):
     trailing_stop = False
     use_custom_stoploss = False
 
-    use_exit_signal = False
+    use_exit_signal = True   # True — required for custom_exit (time exit) to fire (v4.3 fix)
     exit_profit_only = False
     ignore_roi_if_entry_signal = False
     process_only_new_candles = True
@@ -500,6 +500,13 @@ class LeahAIStrategy(IStrategy):
         entry_signal = reduce(lambda x, y: x & y, conditions)
         dataframe["enter_long"] = 0
         dataframe.loc[entry_signal, "enter_long"] = 1
+        # Persist probability tag to trades table — Freqtrade reads enter_tag from this column,
+        # not from confirm_trade_entry's local variable (which was a no-op).
+        if "1" in dataframe.columns:
+            dataframe["enter_tag"] = ""
+            dataframe.loc[entry_signal, "enter_tag"] = dataframe.loc[entry_signal, "1"].apply(
+                lambda p: f"prob_{p:.4f}"
+            )
 
         # Debug: log each condition's last-row result
         cond1 = dataframe["1"].iloc[-1] > self.ml_entry_probability if "1" in dataframe.columns else False
@@ -568,8 +575,12 @@ class LeahAIStrategy(IStrategy):
 
     def custom_exit(self, pair, trade, current_time, current_rate, current_profit, **kwargs):
         # Time-based exit: if underwater after 6 hours, exit rather than hold indefinitely
+        # Both current_time and trade.open_date are tz-aware in Freqtrade 2026.4.
+        # Strip tzinfo from both to allow arithmetic without timezone offset errors.
+        current_time_naive = current_time.replace(tzinfo=None)
+        open_date_naive = trade.open_date.replace(tzinfo=None)
+        hold_minutes = (current_time_naive - open_date_naive).total_seconds() / 60
         if current_profit < 0:
-            hold_minutes = (current_time - trade.open_date).total_seconds() / 60
             if hold_minutes > 360:  # 6 hours
                 return "time_exit_6h_negative"
         return None
@@ -626,6 +637,7 @@ class LeahAIStrategy(IStrategy):
         logger.info(
             f"[{pair}] confirm APPROVED: prob={prob:.4f} btc_trend={btc_trend:+.4f} close={close:.4f} above_ema50"
         )
+        entry_tag = f"prob_{prob:.4f}"
         return True
 
     # =========================================================================
