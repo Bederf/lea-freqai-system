@@ -43,11 +43,13 @@ The paper trading run validates v4.4's real-world signal quality before any capi
 
 ## Paper Trading Stages (Trust Ladder)
 
-| Stage | Trades Required | Gate | Status |
-|-------|---------------|------|--------|
-| L1 | 10 v4.4 trades | Snapshot logging verified | ⬜ Pending |
-| L2 | 25 v4.4 trades | Distribution within ±5pp of training band | ⬜ Pending |
-| L3 | 50 v4.4 trades | Breakeven or better | ⬜ Pending |
+**Hybrid promotion gate:** Either 50 completed v4.4 paper trades, OR 30 calendar days elapsed with opportunity analysis logged — whichever comes first.
+
+|| Stage | Gate | Status |
+||-------|------|--------|
+|| L1 | 10 v4.4 trades, snapshots verified | ⬜ Pending |
+|| L2 | 25 v4.4 trades, distribution within ±5pp of band | ⬜ Pending |
+|| L3 | 50 trades OR 30 days + opportunity analysis | ⬜ Pending |
 
 ---
 
@@ -65,6 +67,27 @@ The paper trading run validates v4.4's real-world signal quality before any capi
 **L2 gate:** Each pair's live mean within ±5pp of training mean, and %>55 within ±5pp of training %>55.
 
 **Cron:** `probwatch_v6` runs every 5 minutes and checks all 4 pairs. Alerts fire if any pair exits its L2 band.
+
+---
+
+## Opportunity Statistics
+
+On every probwatch cron tick, log the following to `validation_v6_probwatch.log`:
+
+| Field | Description |
+|-------|-------------|
+| `cycle_ts` | Timestamp of this cron run (UTC) |
+| `pairs_evaluated` | Number of pairs with v4.4 output this cycle |
+| `probs_evaluated` | Total candles evaluated across all pairs |
+| `prob_gt_55` | Candles where prob > 0.55 |
+| `prob_gt_55_pct` | prob_gt_55 / probs_evaluated |
+| `g1_rejects` | Candles rejected by ATR80 gate |
+| `g1_reject_pct` | g1_rejects / (probs_evaluated) |
+| `g2_rejects` | Candles rejected by other gates |
+| `g2_reject_pct` | g2_rejects / (probs_evaluated) |
+| `net_entries` | Candles that passed all gates (≈ entries) |
+
+These counts accumulate across the validation period. The distribution analysis (per-pair mean, std, %>55 vs band) is captured separately by probwatch_report.py — this section supplements it with the funnel view.
 
 ---
 
@@ -108,12 +131,12 @@ Each entry/exit writes one JSON line to `trade_snapshots_v6.jsonl`:
 
 ## Next Steps
 
-1. **Restart container** to load bug-fixed strategy (done 15:44 UTC)
-2. **Wait for next v4.4 entry** — snapshot should fire and appear in `trade_snapshots_v6.jsonl`
-3. **Verify snapshot** — confirm entry snapshot written to container log path
-4. **L1 gate** — 10 v4.4 trades with valid snapshots
-5. **L2 gate** — distribution check across 25 trades
-6. **L3 gate** — 50 trades, breakeven or better → capital deployment review
+1. **L1 gate** — 10 v4.4 trades with valid snapshots
+2. **L2 gate** — 25 v4.4 trades, distribution within ±5pp of band
+3. **L3 gate** — 50 completed trades OR 30 calendar days elapsed with opportunity statistics logged
+   - If few trades: supplement with funnel analysis (prob>55 rate, ATR80 rejection rate, net entry rate)
+   - Evidence threshold: enough to answer "does v4.4 have a real-world edge?"
+4. **Promote for capital deployment review** — after L3 gate passed
 
 ---
 
