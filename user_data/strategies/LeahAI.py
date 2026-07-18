@@ -966,15 +966,38 @@ class LeahAI(IStrategy):
         This record is written to trade_snapshots_v6.jsonl for every entry and exit,
         creating an audit trail that links gate states to realized P&L.
         """
-        btc_df = self.dp.get_pair_dataframe("BTC/USDT", "5m")
-        btc_trend = None
-        if btc_df is not None and len(btc_df) >= 21:
-            btc_ema21 = ta.EMA(btc_df["close"], timeperiod=21)
-            # TA-Lib returns ndarray — use .values[-1] to get scalar without pandas .iloc
-            btc_trend = float(btc_df["close"].values[-1] / btc_ema21.values[-1] - 1)
+        # ── Resolve signal_candle safely — may be Series, ndarray, or scalar ──
+        def _safeget(obj, key, default=None):
+            """Get by string key or integer index, return default on any error."""
+            try:
+                if isinstance(obj, np.ndarray):
+                    # Index-based access for ndarray
+                    if isinstance(key, int):
+                        return obj[key]
+                    # For string keys on 1-D ndarray, return default
+                    return default
+                elif hasattr(obj, "__getitem__"):
+                    return obj[key]
+                return default
+            except Exception:
+                return default
 
-        # Read &-target (regression value) — the model's vol expansion estimate
-        prob = float(signal_candle["&-target"]) if "&-target" in signal_candle else None
+        # Read &-target (the model's vol expansion probability from v4.4)
+        # signal_candle may be pd.Series, np.ndarray, or dict depending on call path
+        raw = _safeget(signal_candle, "&-target")
+        prob = float(raw) if raw is not None else None
+
+        # BTC trend — use dataframe directly to avoid iloc/.values ambiguity
+        btc_trend = None
+        try:
+            btc_df = self.dp.get_pair_dataframe("BTC/USDT", "5m")
+            if btc_df is not None and len(btc_df) >= 21:
+                close_vals = btc_df["close"].values
+                ema_vals = ta.EMA(btc_df["close"], timeperiod=21)
+                if isinstance(ema_vals, np.ndarray) and len(ema_vals) > 0:
+                    btc_trend = float(close_vals[-1] / ema_vals[-1] - 1)
+        except Exception:
+            pass
 
         garch = self._garch_persistence(pair)
         persist = garch.get("persist")
@@ -990,16 +1013,16 @@ class LeahAI(IStrategy):
         # g4: BTC trend gate
         g4_passed = (btc_trend is not None) and (btc_trend >= 0.002)
         # g5: do_predict quality gate
-        do_predict = int(signal_candle["do_predict"]) if "do_predict" in signal_candle else 0
+        do_predict = int(_safeget(signal_candle, "do_predict", 0) or 0)
         g5_passed = (do_predict == 1)
         # g6: volume gate
-        g6_passed = (float(signal_candle.get("volume", 0)) > 0) if "volume" in signal_candle else False
+        g6_passed = (float(_safeget(signal_candle, "volume", 0) or 0) > 0)
         # g7: EMA50 pair momentum
-        ema50 = float(signal_candle.get("ema_50", 0))
-        close = float(signal_candle.get("close", 0))
+        ema50 = float(_safeget(signal_candle, "ema_50", 0) or 0)
+        close = float(_safeget(signal_candle, "close", 0) or 0)
         g7_passed = (ema50 > 0) and (close > ema50)
         # g8: ATR percentile rank — only enter when volatility is elevated (top 20%%)
-        atr_rank = float(signal_candle.get("atr14_pct_rank", 0))
+        atr_rank = float(_safeget(signal_candle, "atr14_pct_rank", 0) or 0)
         g8_passed = (atr_rank >= 80.0)
 
         return {
