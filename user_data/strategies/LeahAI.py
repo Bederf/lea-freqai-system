@@ -316,6 +316,7 @@ class LeahAI(IStrategy):
         self._pf_candle_count = 0          # total candle evaluations
         self._pf_atr80_pass = 0            # passed g8 (ATR percentile)
         self._pf_prob_pass = 0             # passed g1 (probability gate)
+        self._pf_btc_trend_rejects = 0     # prob>0.55 but rejected by btc_trend gate
         self._pf_entries = 0              # enter_long triggered
         self._pf_roi_exits = 0
         self._pf_time_exits = 0
@@ -719,6 +720,34 @@ class LeahAI(IStrategy):
         except Exception:
             pass
 
+        # ── Per-cycle candidate log ─────────────────────────────────────────
+        # Log every prob>0.55 candidate with gate outcomes for funnel analysis.
+        # This is the primary dataset for understanding why entries don't fire.
+        try:
+            prob_val = float(dataframe["&-target"].iloc[-1]) if "&-target" in dataframe.columns else float("nan")
+            btc_trend_val = float(dataframe["%btc_trend"].iloc[-1]) if "%btc_trend" in dataframe.columns else float("nan")
+            atr_rank_val = float(dataframe["atr14_pct_rank"].iloc[-1]) if "atr14_pct_rank" in dataframe.columns else float("nan")
+            if prob_val > self.ml_entry_probability:
+                cand_record = {
+                    "ts": datetime.now(timezone.utc).isoformat(),
+                    "pair": metadata.get("pair", "UNKNOWN"),
+                    "prob": round(prob_val, 4),
+                    "btc_trend": round(btc_trend_val, 6),
+                    "atr14_pct_rank": round(atr_rank_val, 2),
+                    "g1_prob": bool(cond1),
+                    "g2_btc_trend": bool(cond2),
+                    "g3_ema50": bool(cond3),
+                    "g5_do_predict": bool(cond4),
+                    "g6_volume": bool(cond5),
+                    "g8_atr80": bool(cond6),
+                    "entered": bool(dataframe["enter_long"].iloc[-1]),
+                }
+                cand_path = "/freqtrade/user_data/logs/v44_candidates.jsonl"
+                with open(cand_path, "a") as f:
+                    f.write(json.dumps(cand_record) + "\n")
+        except Exception:
+            pass
+
         # Paper Trading Funnel Tracking
         self._pf_candle_count += 1
         atr80_pass = cond6 if 'cond6' in dir() else True
@@ -726,6 +755,8 @@ class LeahAI(IStrategy):
             self._pf_atr80_pass += 1
         if cond1 and atr80_pass:
             self._pf_prob_pass += 1
+        if cond1 and not cond2 and atr80_pass:
+            self._pf_btc_trend_rejects += 1
         if dataframe["enter_long"].iloc[-1]:
             self._pf_entries += 1
             prob_val = float(dataframe["&-target"].iloc[-1]) if "&-target" in dataframe.columns else 0.0
@@ -753,8 +784,9 @@ class LeahAI(IStrategy):
             funnel_msg = (
                 f"[PAPER MONITOR] elapsed={elapsed_h:.1f}h candles={self._pf_candle_count} "
                 f"atr80_pass={self._pf_atr80_pass} prob_pass={self._pf_prob_pass} "
-                f"entries={self._pf_entries} "
-                f"roi={self._pf_roi_exits} time_exit={self._pf_time_exits} sl={self._pf_sl_exits}"
+                f"entries={self._pf_entries} roi={self._pf_roi_exits} "
+                f"time_exit={self._pf_time_exits} sl={self._pf_sl_exits} "
+                f"btc_trend_blocked={self._pf_btc_trend_rejects}"
             )
             if self._pf_entries >= 10 and not self._checkpoint_fired[10]:
                 self._checkpoint_fired[10] = True
@@ -938,7 +970,8 @@ class LeahAI(IStrategy):
         btc_trend = None
         if btc_df is not None and len(btc_df) >= 21:
             btc_ema21 = ta.EMA(btc_df["close"], timeperiod=21)
-            btc_trend = float(btc_df["close"].iloc[-1] / btc_ema21.iloc[-1] - 1)
+            # TA-Lib returns ndarray — use .values[-1] to get scalar without pandas .iloc
+            btc_trend = float(btc_df["close"].values[-1] / btc_ema21.values[-1] - 1)
 
         # Read &-target (regression value) — the model's vol expansion estimate
         prob = float(signal_candle["&-target"]) if "&-target" in signal_candle else None
