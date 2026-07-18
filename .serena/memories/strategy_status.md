@@ -1,53 +1,49 @@
-# Strategy Status - Oct 28, 2025 (UPDATED)
+# Strategy Status — Updated 2026-07-17
 
-## Three Strategies Available
-1. **LeaFreqAIStrategy** - Aggressive, 83.5% win rate, proven
-2. **HybridAIStrategy** - Mixed approach, underperforms (archived)
-3. **FinAgentStrategy_v2_RiskManaged** - Defensive, 29.9% win rate, low drawdown
+## Active Strategy: LeahAI v6.1
 
-## Current Work: FinAgent Improvement
+**Container:** `freqtrade-lea-new` (docker, shad/freqtrade-lea-v5:latest)
+**Config:** `dry_run=true`, `force_v44_model=true`
+**Status:** ACTIVE — v4.4 is live decision-maker, paper trading in progress
 
-### What Was Done
-✅ Created improved version with better entry filters
-✅ Added ConfluenceFilter class (5-signal validation)
-✅ Increased ML threshold from 0.5% to 0.8%
-✅ Implemented dual-condition entry logic
-✅ Preserved all risk management (Kelly, stoploss, heat limits)
+---
 
-### Files Created
-- `FinAgentStrategy_v2_RiskManaged_Improved.py` (New strategy)
-- `FINAGENT_IMPROVEMENT_PLAN.md` (Detailed explanation)
-- `FINAGENT_CHANGES_SUMMARY.md` (Quick reference)
+## v4.4 Architecture
 
-### Key Improvements
-| Metric | Original | Improved |
-|--------|----------|----------|
-| ML Threshold | 0.5% | 0.8% |
-| Entry Filter | ML only | ML + Confluence |
-| Trade Count | 230 | ~60-80 |
-| Win Rate | 29.9% | 45-50% |
-| Total P&L | -1.01% | -0.5% to +0.5% |
-| Max Drawdown | 1.09% | 0.5-0.8% |
+- **Model:** XGBClassifier (15 features, binary: vol expansion)
+- **Label:** `ATR[i+12] > ATR[i] × 1.05`
+- **Model files:** `leah_v4_4_{BTC,ETH,SOL,LINK}_xgb_clf.pkl` + `_scaler.pkl`
+- **Decision path:** v4.4 overwrites `&-target` in `populate_indicators` → `populate_entry_trend` reads it → `confirm_trade_entry` validates → trade
+- **FreqAI role:** Continues retraining but output is overwritten by v4.4 — not authoritative
 
-### Next Steps
-1. **Backtest improved version**
-   - Command: `freqtrade backtest --strategy FinAgentStrategy_v2_RiskManaged_Improved --config config_lea_backtest.json --timerange 20250920-20251027`
+---
 
-2. **Compare results**
-   - Trade count: 230 → ~60-80 (should drop 70%)
-   - Win rate: 29.9% → 45-50% (should increase 15-20%)
-   - Profit: -1.01% → -0.5% to +0.5%
+## Bugs Fixed (2026-07-17)
 
-3. **Paper trade (1-2 weeks)**
-   - Validate confluence filter works in live market
-   - Check if results match backtest
+1. `custom_stake_amount` read wrong column (`"1"` instead of `"&-target"`) — probability-based sizing always bypassed
+2. `_write_snapshot` used host bind-mount path — silently failed in container
 
-4. **Live deploy (if validated)**
-   - Use improved version with 30% capital
-   - Keep LeaFreqAI with 30% capital (parallel)
-   - Reserve 40% for opportunities
+Both fixed in `user_data/strategies/LeahAI.py`. Container restart required.
 
-### Status
-✅ Implementation complete
-⏳ Ready for backtest
-⏳ Waiting for user to run backtest command
+---
+
+## Paper Trading Status
+
+| ID | Pair | Date | Enter Tag | Prob | Status | Source |
+|---|---|---|---|---|---|---|
+| 7–13 | various | Jul 10–11 | — | — | Closed | Legacy FreqAI |
+| 14 | LINK/USDT | Jul 14 | prob_0.5700 | 0.570 | Closed ROI | Legacy FreqAI |
+| 15 | ETH/USDT | Jul 15 | prob_0.5700 | 0.570 | Closed time_exit | Legacy FreqAI |
+| 16 | LINK/USDT | Jul 17 11:45 | prob_0.6739 | 0.6739 | Open | **v4.4** |
+
+**Trade #16 is the first v4.4 trade.** Container was restarted Jul 17 with `force_v44_model=true`.
+
+---
+
+## Trust Ladder Readiness
+
+- Paper trades needed: 50 (currently 1 v4.4 trade)
+- Snapshot logging: Fixed (needs restart + verify)
+- Valid for counting: Pending restart + snapshot verification
+
+Full architecture documentation: `docs/ARCHITECTURE_CONSOLIDATION.md`

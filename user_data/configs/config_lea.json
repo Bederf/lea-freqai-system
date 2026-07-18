@@ -7,6 +7,7 @@
   "fiat_display_currency": "USD",
   "timeframe": "5m",
   "dry_run": true,
+  "force_v44_model": true,
   "cancel_open_orders_on_exit": false,
   "unfilledtimeout": {
     "entry": 10,
@@ -38,7 +39,8 @@
     "pair_whitelist": [
       "LINK/USDT",
       "ETH/USDT",
-      "SOL/USDT"
+      "SOL/USDT",
+      "BTC/USDT"
     ],
     "pair_blacklist": [
       "BNB/.*"
@@ -51,7 +53,7 @@
   ],
   "telegram": {
     "enabled": true,
-    "token": "8476186230:AAGbCZa271XYhWKyKl5thcT97lVx_EFjqqc",
+    "token": "8476186230:AAHM9ZrerRGeYUmwarejdkckN09T31Li9ns",
     "chat_id": "8359288792"
   },
   "api_server": {
@@ -70,48 +72,39 @@
   "internals": {
     "process_throttle_secs": 5
   },
-  "freqaimodel": "XGBoostClassifier",
   "freqai": {
     "enabled": true,
-    "purge_old_models": 5,
-    "train_period_days": 60,
-    "live_retrain_hours": 999,
-    "identifier": "leah_v2",
-    "fit_live_predictions_candles": 0,
+    "purge_old_models": 2,
+    "train_period_days": 15,
+    "backtest_period_days": 7,
+    "live_retrain_hours": 0,
+    "identifier": "lea_v6",
     "feature_parameters": {
       "include_timeframes": [
-        "5m"
+        "5m",
+        "15m",
+        "1h"
       ],
       "include_corr_pairlist": [
-        "BTC/USDT"
+        "BTC/USDT",
+        "ETH/USDT"
       ],
-      "label_period_candles": 12,
-      "include_shifted_candles": 0,
-      "DI_threshold": 0,
+      "label_period_candles": 20,
+      "include_shifted_candles": 2,
+      "DI_threshold": 0.9,
       "weight_factor": 0.9,
       "principal_component_analysis": false,
-      "use_SVM_to_remove_outliers": false,
+      "use_SVM_to_remove_outliers": true,
       "indicator_periods_candles": [
-        14
-      ]
+        10,
+        20
+      ],
+      "plot_feature_importances": 0
     },
     "data_split_parameters": {
-      "test_size": 0.25,
-      "shuffle": false
+      "test_size": 0.33,
+      "random_state": 1
     },
-    "model_training_parameters": {
-      "n_estimators": 200,
-      "learning_rate": 0.05,
-      "max_depth": 4,
-      "subsample": 0.8,
-      "colsample_bytree": 0.8,
-      "reg_lambda": 0.1,
-      "reg_alpha": 0.0,
-      "min_child_weight": 5,
-      "objective": "binary:logistic",
-      "eval_metric": "logloss",
-      "scale_pos_weight": 2.14
-    }
-  },
-  "identifier": "leah_v4_3"
+    "freqaimodel": "XGBoostRegressor"
+  }
 }

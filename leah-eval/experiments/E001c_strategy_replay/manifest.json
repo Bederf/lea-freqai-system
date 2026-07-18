@@ -1,0 +1,11 @@
+{
+  "experiment_id": "E001c",
+  "title": "Strategy Execution Replay — 0.55 vs 0.65",
+  "hypothesis": "Threshold 0.65 produces superior trading performance vs 0.55 under identical entry/exit mechanics.",
+  "null_hypothesis": "No difference in trading performance between 0.55 and 0.65.",
+  "decision_metric": "net_profit",
+  "secondary_metrics": ["expectancy", "profit_factor", "max_drawdown_pct", "cagr", "win_rate"],
+  "status": "completed",
+  "method": "strategy_execution_replay",
+  "description": "Full trading simulation: entry gates (prob + BTC trend + EMA50), ROI ladder, stoploss, time exit, confidence-scaled position sizing. Compares only 0.55 vs 0.65."
+}

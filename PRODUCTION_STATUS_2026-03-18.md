@@ -1,4 +1,6 @@
-# 🚀 THREE-BOT PRODUCTION STATUS - March 18, 2026
+# THREE-BOT PRODUCTION STATUS — March 18, 2026
+
+> ⚠️ **ARCHIVED / OUTDATED** — This file describes the March 2026 three-bot production state. The LeahAI system has since migrated to a new architecture (v4.4 XGBClassifier, Docker container `freqtrade-lea-new`). See `GO_LIVE_READINESS.md` and `docs/ARCHITECTURE_CONSOLIDATION.md` for current state.
 
 **Date:** March 18, 2026
 **Status:** ✅ **LIVE PRODUCTION** - All bots operational

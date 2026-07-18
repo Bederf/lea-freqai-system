@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>E001b: Ground-Truth Threshold Replay</title>
+<style>
+  :root {
+    --bg: #0d1117; --surface: #161b22; --border: #30363d;
+    --text: #e6edf3; --muted: #7d8590; --accent: #2f81f7;
+    --green: #3fb950; --red: #f85149; --yellow: #d29922;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; padding: 2rem; }
+  .container { max-width: 1200px; margin: 0 auto; }
+  h1 { font-size: 1.5rem; margin-bottom: 0.25rem; color: var(--accent); }
+  .subtitle { color: var(--muted); font-size: 0.875rem; margin-bottom: 2rem; }
+  .badge { display: inline-block; padding: 0.125rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+  .badge-completed { background: #0f3020; color: var(--green); }
+  .badge-running { background: #2a1f00; color: var(--yellow); }
+  .badge-planned { background: #0d1f2d; color: var(--accent); }
+  .summary-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 1rem; }
+  .card-label { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem; }
+  .card-value { font-size: 1.25rem; font-weight: 600; }
+  .card-value.positive { color: var(--green); }
+  .card-value.negative { color: var(--red); }
+  h2 { font-size: 1rem; margin: 1.5rem 0 0.75rem; color: var(--text); border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 1.5rem; font-size: 0.8rem; }
+  th { text-align: left; padding: 0.5rem 0.75rem; background: var(--surface); border-bottom: 1px solid var(--border); color: var(--muted); font-weight: 600; text-transform: uppercase; font-size: 0.65rem; letter-spacing: 0.05em; white-space: nowrap; }
+  td { padding: 0.5rem 0.75rem; border-bottom: 1px solid #21262d; white-space: nowrap; }
+  tr:hover td { background: #1c2128; }
+  tr.best td { background: #0f3020; }
+  tr.best td:first-child { font-weight: 700; color: var(--green); }
+  .recommendation-box { background: #0f3020; border: 1px solid var(--green); border-radius: 6px; padding: 1rem 1.25rem; margin: 1.5rem 0; }
+  .recommendation-box h3 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--green); margin-bottom: 0.5rem; }
+  .recommendation-box p { font-size: 0.9rem; }
+  .manifest-table { font-size: 0.8rem; }
+  .manifest-table td { padding: 0.35rem 0.75rem; }
+  .manifest-table td:first-child { color: var(--muted); width: 160px; }
+  .params-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.5rem; margin-bottom: 1.5rem; }
+  .param-item { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 0.5rem 0.75rem; font-size: 0.8rem; }
+  .param-key { color: var(--muted); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  .param-val { color: var(--accent); font-weight: 600; }
+  .footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border); color: var(--muted); font-size: 0.75rem; }
+</style>
+</head>
+<body>
+<div class="container">
+<h1>E001b: Ground-Truth Threshold Replay</h1>
+<div class="subtitle">
+  Generated 2026-07-14 19:40 UTC &nbsp;|&nbsp;
+  Hypothesis: 0.65 produces higher expectancy than 0.55 in ground-truth replay. &nbsp;|&nbsp;
+  <span class="badge badge-completed">completed</span>
+</div>
+
+
+    <div class="summary-grid">
+        <div class="card">
+            <div class="card-label">Best Threshold</div>
+            <div class="card-value">0.65</div>
+        </div>
+        <div class="card">
+            <div class="card-label">Primary Metric</div>
+            <div class="card-value">EXPECTANCY</div>
+        </div>
+        <div class="card">
+            <div class="card-label">Best Value</div>
+            <div class="card-value positive">+0.7268</div>
+        </div>
+        <div class="card">
+            <div class="card-label">Profit Factor</div>
+            <div class="card-value positive">6.350</div>
+        </div>
+        <div class="card">
+            <div class="card-label">Trades</div>
+            <div class="card-value">590</div>
+        </div>
+        <div class="card">
+            <div class="card-label">Max Drawdown</div>
+            <div class="card-value negative">1.4%</div>
+        </div>
+    </div>
+    
+
+<div class="recommendation-box">
+  <h3>Recommendation</h3>
+  <p>Threshold = 0.65 — Highest expectancy among acceptable configs (PF > 1.0, DD < 50%, trades >= 10)</p>
+</div>
+
+<h2>Parameters</h2>
+<div class="params-grid"><div class="param-item"><div class="param-key">thresholds</div><div class="param-val">[0.4, 0.45, 0.5, 0.55, 0.6, 0.65]</div></div><div class="param-item"><div class="param-key">model</div><div class="param-val">C (15 stable)</div></div><div class="param-item"><div class="param-key">pairs</div><div class="param-val">BTC, ETH, SOL, LINK</div></div><div class="param-item"><div class="param-key">fee_pct</div><div class="param-val">0.001</div></div><div class="param-item"><div class="param-key">method</div><div class="param-val">full_candle_level_replay</div></div><div class="param-item"><div class="param-key">folds_per_pair</div><div class="param-val">18</div></div><div class="param-item"><div class="param-key">candles</div><div class="param-val">8640/2016</div></div></div>
+
+<h2>Full Sweep Results</h2>
+<table>
+  <thead><tr><th>threshold</th><th>trades</th><th>wins</th><th>losses</th><th>win_rate_pct</th><th>avg_win</th><th>avg_loss</th><th>profit_factor</th><th>total_pnl</th><th>expectancy</th><th>max_drawdown</th><th>max_drawdown_pct</th><th>breakeven_win_rate</th><th>median_trade</th><th>rank</th></tr></thead>
+  <tbody><tr class='best'><td>0.6500</td><td>590.0000</td><td>510.0000</td><td>80.0000</td><td>86.44%</td><td>+0.9980</td><td>+1.0020</td><td>6.350</td><td>+428.8200</td><td>+0.7268</td><td>-6.0160</td><td>1.38%</td><td>50.10%</td><td>0.9980</td><td>1.0000</td></tr><tr class=''><td>0.6000</td><td>1222.0000</td><td>1000.0000</td><td>222.0000</td><td>81.83%</td><td>+0.9980</td><td>+1.0020</td><td>4.487</td><td>+775.5560</td><td>+0.6347</td><td>-10.0200</td><td>1.28%</td><td>50.10%</td><td>0.9980</td><td>2.0000</td></tr><tr class=''><td>0.5500</td><td>2594.0000</td><td>1972.0000</td><td>622.0000</td><td>76.02%</td><td>+0.9980</td><td>+1.0020</td><td>3.158</td><td>+1344.8120</td><td>+0.5184</td><td>-11.0500</td><td>0.82%</td><td>50.10%</td><td>0.9980</td><td>3.0000</td></tr><tr class=''><td>0.5000</td><td>5901.0000</td><td>3930.0000</td><td>1971.0000</td><td>66.60%</td><td>+0.9980</td><td>+1.0020</td><td>1.986</td><td>+1947.1980</td><td>+0.3300</td><td>-21.1340</td><td>1.08%</td><td>50.10%</td><td>0.9980</td><td>4.0000</td></tr><tr class=''><td>0.4500</td><td>13032.0000</td><td>7384.0000</td><td>5648.0000</td><td>56.66%</td><td>+0.9980</td><td>+1.0020</td><td>1.302</td><td>+1709.9360</td><td>+0.1312</td><td>-72.6960</td><td>4.21%</td><td>50.10%</td><td>0.9980</td><td>5.0000</td></tr><tr class=''><td>0.4000</td><td>22822.0000</td><td>11583.0000</td><td>11239.0000</td><td>50.75%</td><td>+0.9980</td><td>+1.0020</td><td>1.026</td><td>+298.3560</td><td>+0.0131</td><td>-228.6060</td><td>62.11%</td><td>50.10%</td><td>0.9980</td><td>6.0000</td></tr></tbody>
+</table>
+
+<h2>Experiment Manifest</h2>
+<table class="manifest-table">
+  <tbody>
+  <tr><td>experiment_id</td><td>E001b</td></tr>
+  <tr><td>hypothesis</td><td>0.65 produces higher expectancy than 0.55 in ground-truth replay.</td></tr>
+  <tr><td>null_hypothesis</td><td>No difference in expectancy between 0.65 and 0.55.</td></tr>
+  <tr><td>decision_metric</td><td>expectancy</td></tr>
+  <tr><td>secondary_metrics</td><td>profit_factor, max_drawdown_pct, trades, win_rate_pct</td></tr>
+  <tr><td>status</td><td>completed</td></tr>
+  <tr><td>generated</td><td>2026-07-14 19:40 UTC</td></tr>
+  <tr><td>report_file</td><td>E001b_20260714_194049.html</td></tr>
+  </tbody>
+</table>
+
+<div class="footer">
+  Leah Evaluation Harness &nbsp;|&nbsp; leah-eval/ &nbsp;|&nbsp; Automated experiment reporting
+</div>
+</div>
+</body>
+</html>

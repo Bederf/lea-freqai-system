@@ -1,0 +1,3 @@
+threshold,trades,wins,losses,win_rate_pct,avg_win,avg_loss,gross_profit,gross_loss,profit_factor,total_pnl,expectancy,max_drawdown,max_drawdown_pct,median_trade,breakeven_win_rate,cagr,avg_duration_min,rank
+0.55,207,83,124,40.1,0.01266,0.00995,1.051,1.234,0.851,-0.184,-0.00089,-0.351,1702.77,-0.00316,44.02,-44.45,331.1,1
+0.65,25,10,15,40.0,0.01312,0.00946,0.131,0.142,0.925,-0.011,-0.00043,-0.059,122.0,-0.00248,41.89,-3.06,357.4,2

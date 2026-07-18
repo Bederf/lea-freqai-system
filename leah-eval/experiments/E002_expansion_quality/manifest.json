@@ -1,0 +1,25 @@
+{
+  "experiment_id": "E002",
+  "title": "Expansion Quality Filtering",
+  "hypothesis": "Among correctly predicted volatility expansions, only those above a minimum expected magnitude are economically tradable after fees and execution.",
+  "null_hypothesis": "Expansion quality filter has no effect on trading performance — the model identifies expansions uniformly.",
+  "decision_metric": "net_profit",
+  "secondary_metrics": ["expectancy", "profit_factor", "win_rate", "max_drawdown_pct", "cagr", "trade_count"],
+  "status": "completed",
+  "method": "expansion_quality_sweep",
+  "description": "Tests whether filtering entries by minimum expansion magnitude (ATR percentile, vol_ratio threshold, hl_range) improves trading performance. Hypothesis: not all predicted expansions are large enough to monetize after fees.",
+  "pairs": ["BTC", "ETH", "SOL", "LINK"],
+  "fee_pct": 0.001,
+  "folds": 18,
+  "entry_gates": "prob (0.55) + BTC_trend + EMA50 + [expansion_quality_filter]",
+  "roi_ladder": "[[0, 0.05], [30, 0.03], [60, 0.02], [120, 0.01]]",
+  "stoploss": "-0.05",
+  "time_exit_hrs": 6,
+  "filters_tested": [
+    {"name": "atr14_percentile", "feature": "atr14", "type": "percentile_rank", "values": [0, 20, 40, 60, 80, 100]},
+    {"name": "atr14_raw", "feature": "atr14", "type": "raw", "values": [0.005, 0.010, 0.015, 0.020, 0.025]},
+    {"name": "vol_ratio_20", "feature": "vol_ratio_20", "type": "threshold", "values": [0.9, 1.0, 1.1, 1.2, 1.3, 1.5]},
+    {"name": "hl_range", "feature": "hl_range", "type": "percentile_rank", "values": [0, 20, 40, 60, 80]},
+    {"name": "atr_pct_rel", "feature": "%atr14_rel", "type": "threshold", "values": [0.0, 0.5, 1.0, 1.5, 2.0]}
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "experiment_id": "E001d",
+  "title": "Exit Attribution — MFE/MAE Analysis",
+  "hypothesis": "Time-exit trades (60% of all trades) show profitable opportunities that the current exits fail to capture, vs trades that never became profitable at all.",
+  "null_hypothesis": "Time-exit trades never became profitable — the entry itself was wrong.",
+  "decision_metric": "pct_trades_with_mfe_opportunity",
+  "secondary_metrics": ["mfe_distribution", "mae_distribution", "mfe_vs_actual_exit", "time_to_mfe", "pct_mfe_before_first_exit"],
+  "status": "completed",
+  "method": "mfe_mae_exit_attribution",
+  "pairs": ["BTC", "ETH", "SOL", "LINK"],
+  "fee_pct": 0.001,
+  "folds": 18,
+  "entry_gates": "prob + BTC_trend + EMA50",
+  "roi_ladder": "[[0, 0.05], [30, 0.03], [60, 0.02], [120, 0.01]]",
+  "stoploss": "-0.05",
+  "time_exit_hrs": 6,
+  "notes": "Tracks Maximum Favorable Excursion (MFE) and Maximum Adverse Excursion (MAE) per trade to determine if profitable opportunities existed but were not captured by current exit logic."
+}

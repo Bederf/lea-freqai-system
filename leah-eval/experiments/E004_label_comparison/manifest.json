@@ -1,0 +1,53 @@
+{
+  "experiment_id": "E004",
+  "title": "Label Comparison — Economic Alignment",
+  "hypothesis": "A label that combines volatility expansion with minimum absolute magnitude (ATR80 filter embedded in the target) will produce a better trading classifier than the current relative-only label (ATR[t+12] > ATR[t] × 1.05).",
+  "null_hypothesis": "All candidate labels produce equivalent trading performance — the current label's bias toward low-ATR states is not economically significant.",
+  "decision_metric": "expectancy",
+  "secondary_metrics": ["profit_factor", "win_rate", "calibration", "walk_forward_auc", "trade_count", "time_exit_rate", "mfe_mean"],
+  "status": "pending",
+  "method": "walkforward_label_comparison",
+  "description": "Compare 4 candidate labels head-to-head using walk-forward validation. Each label trains its own classifier. All other strategy parameters (features, threshold, entry/exit rules) are held constant. Measures whether a more economically-aligned label improves trading outcomes.",
+  "pairs": ["BTC", "ETH", "SOL", "LINK"],
+  "fee_pct": 0.001,
+  "folds": 18,
+  "labels": [
+    {
+      "id": "A",
+      "name": "relative_5pct",
+      "definition": "ATR[t+12] > ATR[t] × 1.05",
+      "description": "Current label. Relative expansion only. Easy to satisfy at low ATR.",
+      "positive_rate_target": "~32%"
+    },
+    {
+      "id": "B",
+      "name": "relative_5pct_min_abs_atr",
+      "definition": "ATR[t+12] > ATR[t] × 1.05 AND ATR[t+12] - ATR[t] > ATR[t] × 0.50",
+      "description": "Adds minimum absolute ATR expansion requirement (50% of current ATR). Filters out small expansions at low ATR.",
+      "positive_rate_target": "~12-18% (est)"
+    },
+    {
+      "id": "C",
+      "name": "relative_10pct",
+      "definition": "ATR[t+12] > ATR[t] × 1.10",
+      "description": "Harder relative threshold. Reduces low-ATR bias by requiring larger % move.",
+      "positive_rate_target": "~18-22% (est)"
+    },
+    {
+      "id": "D",
+      "name": "mfe_threshold",
+      "definition": "Max(close[t+1:t+12] / close[t] - 1) × 100 >= 1.0% AND ATR[t+12] > ATR[t] × 1.05",
+      "description": "Direct MFE target: actual price must move ≥1% within 12 candles AND volatility must expand. Aligns label with minimum tradable move.",
+      "positive_rate_target": "~12-18% (est)"
+    }
+  ],
+  "entry_gates": "prob >= 0.55 AND btc_trend >= 0.002 AND close > EMA50",
+  "roi_ladder": "[[0, 0.05], [30, 0.03], [60, 0.02], [120, 0.01]]",
+  "stoploss": "-0.05",
+  "time_exit_hrs": 6,
+  "output": {
+    "label_comparison_table": "per-label metrics across all pairs and folds",
+    "best_label": "recommended label based on decision_metric",
+    "forward_test_results": "unseen holdout validation if available"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "experiment_id": "E001b",
+  "title": "Ground-Truth Threshold Replay",
+  "hypothesis": "The leading candidate from E001a (0.65) produces higher expectancy than 0.55 when trades are replayed against actual historical candle data.",
+  "null_hypothesis": "No difference in expectancy between 0.65 and 0.55 when replayed against ground-truth candles.",
+  "decision_metric": "expectancy",
+  "secondary_metrics": ["profit_factor", "max_drawdown_pct", "trades", "win_rate_pct"],
+  "status": "completed",
+  "generated": "2026-07-14",
+  "pairs": ["BTC", "ETH", "SOL", "LINK"],
+  "thresholds_swept": [0.40, 0.45, 0.50, 0.55, 0.60, 0.65],
+  "method": "full_candle_level_replay",
+  "note": "Ground truth: loads actual feather candles, builds features with actual v4.4 logic, runs actual model per fold, simulates entry/exit at next-candle-close, deducts real fees."
+}

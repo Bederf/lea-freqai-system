@@ -6,6 +6,8 @@ This repository is currently operated as a multi-bot Freqtrade workspace, not as
 
 - `DAILY_SCORECARD.md`
   Daily operating view for the current paper-trading bots: `lea`, `finagent`, `diagnostic`, and `bbrsi`.
+- `docs/ARCHITECTURE_CONSOLIDATION.md`
+  **LeahAI v4.4 architecture audit — current active system.** Full call chain, component status, bug fixes, and Trust Ladder readiness. Updated 2026-07-17.
 - `BOT_RESEARCH_WORKFLOW.md`
   Current backtesting and conservative hyperopt workflow using the live bot configs and current strategy files.
 - `docs/systemd-services/README.md`

@@ -1,6 +1,6 @@
 # LEA Strategy Implementation Progress
 
-> Historical note: this is an implementation history log for an earlier LEA strategy phase. It does not fully reflect the current repo-wide multi-bot setup.
+> ⚠️ **ARCHIVED / OUTDATED** — This file covers the Oct 2025 LeaFreqAIStrategy era. Current active strategy is **LeahAI v6.1** (user_data/strategies/LeahAI.py). Active architecture documentation is in `docs/ARCHITECTURE_CONSOLIDATION.md`.
 
 **Date:** 2025-10-20
 **Status:** ✅ OPTIMIZED & READY FOR PRODUCTION

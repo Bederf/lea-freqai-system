@@ -1,0 +1,13 @@
+{
+  "experiment_id": "E001",
+  "title": "Probability Threshold Sweep",
+  "hypothesis": "Lowering the entry probability threshold from 0.55 to 0.50 (or nearby) increases expectancy while maintaining acceptable drawdown and trade frequency.",
+  "null_hypothesis": "No improvement in expectancy when threshold is changed.",
+  "decision_metric": "expectancy",
+  "secondary_metrics": ["profit_factor", "max_drawdown_pct", "trades", "win_rate_pct"],
+  "status": "completed",
+  "generated": "2026-07-14",
+  "pairs": ["BTC", "ETH", "SOL", "LINK"],
+  "thresholds_swept": [0.40, 0.45, 0.50, 0.55, 0.60, 0.65],
+  "note": "Uses walk-forward fold aggregate statistics (expE) for fast approximation. Full candle-level replay is the ground truth."
+}

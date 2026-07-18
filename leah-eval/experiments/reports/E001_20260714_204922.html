@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>E001: Probability Threshold Sweep</title>
+<style>
+  :root {
+    --bg: #0d1117; --surface: #161b22; --border: #30363d;
+    --text: #e6edf3; --muted: #7d8590; --accent: #2f81f7;
+    --green: #3fb950; --red: #f85149; --yellow: #d29922;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; padding: 2rem; }
+  .container { max-width: 1200px; margin: 0 auto; }
+  h1 { font-size: 1.5rem; margin-bottom: 0.25rem; color: var(--accent); }
+  .subtitle { color: var(--muted); font-size: 0.875rem; margin-bottom: 2rem; }
+  .badge { display: inline-block; padding: 0.125rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+  .badge-completed { background: #0f3020; color: var(--green); }
+  .badge-running { background: #2a1f00; color: var(--yellow); }
+  .badge-planned { background: #0d1f2d; color: var(--accent); }
+  .summary-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 1rem; }
+  .card-label { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem; }
+  .card-value { font-size: 1.25rem; font-weight: 600; }
+  .card-value.positive { color: var(--green); }
+  .card-value.negative { color: var(--red); }
+  h2 { font-size: 1rem; margin: 1.5rem 0 0.75rem; color: var(--text); border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 1.5rem; font-size: 0.8rem; }
+  th { text-align: left; padding: 0.5rem 0.75rem; background: var(--surface); border-bottom: 1px solid var(--border); color: var(--muted); font-weight: 600; text-transform: uppercase; font-size: 0.65rem; letter-spacing: 0.05em; white-space: nowrap; }
+  td { padding: 0.5rem 0.75rem; border-bottom: 1px solid #21262d; white-space: nowrap; }
+  tr:hover td { background: #1c2128; }
+  tr.best td { background: #0f3020; }
+  tr.best td:first-child { font-weight: 700; color: var(--green); }
+  .recommendation-box { background: #0f3020; border: 1px solid var(--green); border-radius: 6px; padding: 1rem 1.25rem; margin: 1.5rem 0; }
+  .recommendation-box h3 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--green); margin-bottom: 0.5rem; }
+  .recommendation-box p { font-size: 0.9rem; }
+  .manifest-table { font-size: 0.8rem; }
+  .manifest-table td { padding: 0.35rem 0.75rem; }
+  .manifest-table td:first-child { color: var(--muted); width: 160px; }
+  .params-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.5rem; margin-bottom: 1.5rem; }
+  .param-item { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 0.5rem 0.75rem; font-size: 0.8rem; }
+  .param-key { color: var(--muted); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  .param-val { color: var(--accent); font-weight: 600; }
+  .footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border); color: var(--muted); font-size: 0.75rem; }
+</style>
+</head>
+<body>
+<div class="container">
+<h1>E001: Probability Threshold Sweep</h1>
+<div class="subtitle">
+  Generated 2026-07-14 20:49 UTC &nbsp;|&nbsp;
+  Hypothesis: Lowering the entry probability threshold from 0.55 to 0.50 (or nearby) increases expectancy. &nbsp;|&nbsp;
+  <span class="badge badge-completed">completed</span>
+</div>
+
+
+    <div class="summary-grid">
+        <div class="card">
+            <div class="card-label">Best Threshold</div>
+            <div class="card-value">0.65</div>
+        </div>
+        <div class="card">
+            <div class="card-label">Primary Metric</div>
+            <div class="card-value">EXPECTANCY</div>
+        </div>
+        <div class="card">
+            <div class="card-label">Best Value</div>
+            <div class="card-value positive">+0.0382</div>
+        </div>
+        <div class="card">
+            <div class="card-label">Profit Factor</div>
+            <div class="card-value positive">1.079</div>
+        </div>
+        <div class="card">
+            <div class="card-label">Trades</div>
+            <div class="card-value">1069</div>
+        </div>
+        <div class="card">
+            <div class="card-label">Max Drawdown</div>
+            <div class="card-value negative">92.6%</div>
+        </div>
+    </div>
+    
+
+<div class="recommendation-box">
+  <h3>Recommendation</h3>
+  <p>Threshold = 0.65 — No config meets all acceptability criteria; using best expectancy</p>
+</div>
+
+<h2>Parameters</h2>
+<div class="params-grid"><div class="param-item"><div class="param-key">thresholds</div><div class="param-val">[0.4, 0.45, 0.5, 0.55, 0.6, 0.65]</div></div><div class="param-item"><div class="param-key">model</div><div class="param-val">C (15 stable features)</div></div><div class="param-item"><div class="param-key">pairs</div><div class="param-val">BTC, ETH, SOL, LINK</div></div><div class="param-item"><div class="param-key">fee_pct</div><div class="param-val">0.002</div></div><div class="param-item"><div class="param-key">method</div><div class="param-val">normal_approximation_from_fold_stats</div></div><div class="param-item"><div class="param-key">folds_used</div><div class="param-val">18</div></div></div>
+
+<h2>Full Sweep Results</h2>
+<table>
+  <thead><tr><th>threshold</th><th>trades</th><th>wins</th><th>losses</th><th>win_rate_pct</th><th>avg_win</th><th>avg_loss</th><th>profit_factor</th><th>total_pnl</th><th>expectancy</th><th>max_drawdown</th><th>max_drawdown_pct</th><th>breakeven_win_rate</th><th>median_trade</th><th>rank</th></tr></thead>
+  <tbody><tr class='best'><td>0.6500</td><td>1069.0000</td><td>556.0000</td><td>513.0000</td><td>52.01%</td><td>+0.9980</td><td>+1.0020</td><td>1.079</td><td>+40.8620</td><td>+0.0382</td><td>-93.4580</td><td>92.58%</td><td>50.10%</td><td>0.9980</td><td>1.0000</td></tr><tr class=''><td>0.6000</td><td>2063.0000</td><td>1007.0000</td><td>1056.0000</td><td>48.81%</td><td>+0.9980</td><td>+1.0020</td><td>0.950</td><td>-53.1260</td><td>-0.0258</td><td>-187.9600</td><td>170.93%</td><td>50.10%</td><td>-1.0020</td><td>2.0000</td></tr><tr class=''><td>0.5500</td><td>3701.0000</td><td>1688.0000</td><td>2013.0000</td><td>45.61%</td><td>+0.9980</td><td>+1.0020</td><td>0.835</td><td>-332.4020</td><td>-0.0898</td><td>-486.0940</td><td>316.28%</td><td>50.10%</td><td>-1.0020</td><td>3.0000</td></tr><tr class=''><td>0.5000</td><td>6145.0000</td><td>2585.0000</td><td>3560.0000</td><td>42.07%</td><td>+0.9980</td><td>+1.0020</td><td>0.723</td><td>-987.2900</td><td>-0.1607</td><td>-1202.8580</td><td>557.99%</td><td>50.10%</td><td>-1.0020</td><td>4.0000</td></tr><tr class=''><td>0.4500</td><td>9451.0000</td><td>3640.0000</td><td>5811.0000</td><td>38.51%</td><td>+0.9980</td><td>+1.0020</td><td>0.624</td><td>-2189.9020</td><td>-0.2317</td><td>-2466.3480</td><td>892.16%</td><td>50.10%</td><td>-1.0020</td><td>5.0000</td></tr><tr class=''><td>0.4000</td><td>13483.0000</td><td>4709.0000</td><td>8774.0000</td><td>34.93%</td><td>+0.9980</td><td>+1.0020</td><td>0.535</td><td>-4091.9660</td><td>-0.3035</td><td>-4423.3020</td><td>1334.99%</td><td>50.10%</td><td>-1.0020</td><td>6.0000</td></tr></tbody>
+</table>
+
+<h2>Experiment Manifest</h2>
+<table class="manifest-table">
+  <tbody>
+  <tr><td>experiment_id</td><td>E001</td></tr>
+  <tr><td>hypothesis</td><td>Lowering the entry probability threshold from 0.55 to 0.50 (or nearby) increases expectancy.</td></tr>
+  <tr><td>null_hypothesis</td><td>No improvement in expectancy when threshold is changed.</td></tr>
+  <tr><td>decision_metric</td><td>expectancy</td></tr>
+  <tr><td>secondary_metrics</td><td>profit_factor, max_drawdown_pct, trades, win_rate_pct</td></tr>
+  <tr><td>status</td><td>completed</td></tr>
+  <tr><td>generated</td><td>2026-07-14 20:49 UTC</td></tr>
+  <tr><td>report_file</td><td>E001_20260714_204922.html</td></tr>
+  </tbody>
+</table>
+
+<div class="footer">
+  Leah Evaluation Harness &nbsp;|&nbsp; leah-eval/ &nbsp;|&nbsp; Automated experiment reporting
+</div>
+</div>
+</body>
+</html>
