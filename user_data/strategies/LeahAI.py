@@ -707,55 +707,20 @@ class LeahAI(IStrategy):
                 lambda p: f"prob_{p:.4f}"
             )
 
-        # Debug: log each condition's last-row result
-        try:
-            cond1 = dataframe["&-target"].iloc[-1] > self.ml_entry_probability if "&-target" in dataframe.columns else False
-            cond2 = dataframe["%btc_trend"].iloc[-1] >= 0.002 if "%btc_trend" in dataframe.columns else False
-            cond3 = dataframe["close"].iloc[-1] > dataframe["ema_50"].iloc[-1] if "ema_50" in dataframe.columns else False
-            cond4 = dataframe["do_predict"].iloc[-1] == 1 if "do_predict" in dataframe.columns else False
-            cond5 = dataframe["volume"].iloc[-1] > 0 if "volume" in dataframe.columns else False
-            cond6 = (float(dataframe["atr14_pct_rank"].iloc[-1]) >= 80.0) if "atr14_pct_rank" in dataframe.columns else True
-            _prob = dataframe["&-target"].iloc[-1] if "&-target" in dataframe.columns else float("nan")
-            logger.warning(f"[{metadata['pair']}] entry check: prob={_prob:.4f} vs {self.ml_entry_probability}, cond1={cond1}, cond2={cond2}, cond3={cond3}, cond4={cond4}, cond5={cond5}, cond6_g8_atr80={cond6}")
-        except Exception:
-            pass
-
-        # ── Per-cycle candidate log ─────────────────────────────────────────
-        # Log every prob>0.55 candidate with gate outcomes for funnel analysis.
-        # This is the primary dataset for understanding why entries don't fire.
-        try:
-            prob_val = float(dataframe["&-target"].iloc[-1]) if "&-target" in dataframe.columns else float("nan")
-            btc_trend_val = float(dataframe["%btc_trend"].iloc[-1]) if "%btc_trend" in dataframe.columns else float("nan")
-            atr_rank_val = float(dataframe["atr14_pct_rank"].iloc[-1]) if "atr14_pct_rank" in dataframe.columns else float("nan")
-            if prob_val > self.ml_entry_probability:
-                cand_record = {
-                    "ts": datetime.now(timezone.utc).isoformat(),
-                    "pair": metadata.get("pair", "UNKNOWN"),
-                    "prob": round(prob_val, 4),
-                    "btc_trend": round(btc_trend_val, 6),
-                    "atr14_pct_rank": round(atr_rank_val, 2),
-                    "g1_prob": bool(cond1),
-                    "g2_btc_trend": bool(cond2),
-                    "g3_ema50": bool(cond3),
-                    "g5_do_predict": bool(cond4),
-                    "g6_volume": bool(cond5),
-                    "g8_atr80": bool(cond6),
-                    "entered": bool(dataframe["enter_long"].iloc[-1]),
-                }
-                cand_path = "/freqtrade/user_data/logs/v44_candidates.jsonl"
-                with open(cand_path, "a") as f:
-                    f.write(json.dumps(cand_record) + "\n")
-        except Exception:
-            pass
-
         # Paper Trading Funnel Tracking
+        # Counts every analyzed candle and tracks gate pass rates.
+        # NOTE: populate_entry_trend sets enter_long; confirm_trade_entry
+        # is the authoritative gate validator (includes ATR80, do_predict, volume).
         self._pf_candle_count += 1
-        atr80_pass = cond6 if 'cond6' in dir() else True
+        atr_rank_val = float(dataframe["atr14_pct_rank"].iloc[-1]) if "atr14_pct_rank" in dataframe.columns else float("nan")
+        atr80_pass = (atr_rank_val >= 80.0) and not np.isnan(atr_rank_val)
         if atr80_pass:
             self._pf_atr80_pass += 1
-        if cond1 and atr80_pass:
+        cond1_val = float(dataframe["&-target"].iloc[-1]) > self.ml_entry_probability if "&-target" in dataframe.columns else False
+        if cond1_val and atr80_pass:
             self._pf_prob_pass += 1
-        if cond1 and not cond2 and atr80_pass:
+        btc_trend_val = float(dataframe["%btc_trend"].iloc[-1]) if "%btc_trend" in dataframe.columns else float("nan")
+        if cond1_val and (not np.isnan(btc_trend_val) and btc_trend_val < 0.002) and atr80_pass:
             self._pf_btc_trend_rejects += 1
         if dataframe["enter_long"].iloc[-1]:
             self._pf_entries += 1
@@ -1115,9 +1080,53 @@ class LeahAI(IStrategy):
             logger.warning(f"[{pair}] confirm DENIED: close={close:.4f} <= ema_50={ema_50:.4f}")
             return False
 
+        # Gate 4: FreqAI quality gate
+        do_predict = int(signal_candle.get("do_predict", 0) or 0)
+        if do_predict != 1:
+            logger.warning(f"[{pair}] confirm DENIED: do_predict={do_predict} != 1")
+            return False
+
+        # Gate 5: valid candle
+        volume = float(signal_candle.get("volume", 0) or 0)
+        if volume <= 0:
+            logger.warning(f"[{pair}] confirm DENIED: volume={volume} <= 0")
+            return False
+
+        # Gate 6: ATR percentile rank — top 20% volatility (vol expansion thesis)
+        atr_rank = float(signal_candle.get("atr14_pct_rank", 0) or 0)
+        if atr_rank < 80.0:
+            logger.warning(f"[{pair}] confirm DENIED: atr14_pct_rank={atr_rank:.2f} < 80")
+            return False
+
+        # All gates passed — this is the decision moment
         logger.info(
-            f"[{pair}] confirm APPROVED: prob={prob:.4f} btc_trend={btc_trend:+.4f} close={close:.4f} above_ema50"
+            f"[{pair}] confirm APPROVED: prob={prob:.4f} btc_trend={btc_trend:+.4f} "
+            f"close={close:.4f} do_predict={do_predict} vol={volume:.0f} atr80={atr_rank:.1f}"
         )
+
+        # ── Per-cycle candidate log — written at the exact decision moment ─────
+        # This replaces the populate_entry_trend cand_record (which logged the wrong candle)
+        try:
+            cand_record = {
+                "ts": datetime.now(timezone.utc).isoformat(),
+                "pair": pair,
+                "prob": round(prob, 4),
+                "btc_trend": round(btc_trend, 6),
+                "atr14_pct_rank": round(atr_rank, 2),
+                "do_predict": bool(do_predict),
+                "volume": round(volume, 4),
+                "g4_btc_trend": bool(btc_trend >= 0.002),
+                "g6_do_predict": bool(do_predict == 1),
+                "g7_volume": bool(volume > 0),
+                "g8_atr80": bool(atr_rank >= 80.0),
+                "entered": True,
+            }
+            cand_path = "/freqtrade/user_data/logs/v44_candidates.jsonl"
+            with open(cand_path, "a") as f:
+                f.write(json.dumps(cand_record) + "\n")
+        except Exception:
+            pass
+
         entry_tag = f"prob_{prob:.4f}"
 
         # ── Entry snapshot (immutable record of conditions at moment of entry) ──
