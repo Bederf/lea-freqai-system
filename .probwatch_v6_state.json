@@ -1,0 +1,50 @@
+{
+  "last_updated": "2026-07-17T06:45:00 UTC",
+  "strategy": "LeahAI v6.1",
+  "config": {
+    "dry_run": true,
+    "force_v44_model": true,
+    "freqai_identifier": "lea_v6",
+    "freqaimodel": "XGBoostRegressor"
+  },
+  "container": "freqtrade-lea-new",
+  "uptime_hours": 16,
+  "v44_status": "ACTIVE — sole decision authority",
+  "v44_model_files": {
+    "BTC": "leah_v4_4_BTC_xgb_clf.pkl + _scaler.pkl",
+    "ETH": "leah_v4_4_ETH_xgb_clf.pkl + _scaler.pkl",
+    "SOL": "leah_v4_4_SOL_xgb_clf.pkl + _scaler.pkl",
+    "LINK": "leah_v4_4_LINK_xgb_clf.pkl + _scaler.pkl"
+  },
+  "distribution": {
+    "BTC": {"mean": 0.3782, "std": 0.1152, "pct_gt55": 5.03, "band": 3.0, "drift": "+2.03"},
+    "ETH": {"mean": 0.3487, "std": 0.1028, "pct_gt55": 2.27, "band": 3.0, "drift": "-0.73"},
+    "SOL": {"mean": 0.3688, "std": 0.0960, "pct_gt55": 1.51, "band": 1.0, "drift": "+0.51"},
+    "LINK": {"mean": 0.3686, "std": 0.1077, "pct_gt55": 4.36, "band": 2.0, "drift": "+2.36"}
+  },
+  "bugs_fixed": [
+    {
+      "item": "custom_stake_amount read '1' instead of '&-target'",
+      "fix": "Changed to read '&-target' — stake sizing now uses v4.4 probability",
+      "line": 1097
+    },
+    {
+      "item": "_write_snapshot used self.user_data_dir (host path, fails silently in container)",
+      "fix": "Hardcoded /freqtrade/user_data/logs/trade_snapshots_v6.jsonl",
+      "line": 996
+    }
+  ],
+  "trust_ladder": {
+    "paper_trades": {
+      "total": 1,
+      "v4_4_trades": 1,
+      "legacy_trades": 0,
+      "checkpoint_10": false,
+      "checkpoint_25": false,
+      "checkpoint_50": false
+    },
+    "valid_for_counting": false,
+    "reason": "Need restart to pick up bug fixes, then one successful snapshot write"
+  },
+  "architecture_doc": "docs/ARCHITECTURE_CONSOLIDATION.md"
+}

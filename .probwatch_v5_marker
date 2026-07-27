@@ -1,0 +1,2 @@
+LAST_TS=2026-07-07T19:25:06+00:00
+NOTE=v5 bot died at 2026-07-07 19:28:32 SIGINT; no new v5 gate entries. Container now running v6. Stale open trades (Trade19, Trade20) remain in v5 DB from dead session — manual resolution may be required.
