@@ -21,8 +21,9 @@ Unchanged from v3:
   - do_predict == 1 quality gate
   - RSI < 70 overbought guard
   - Stoploss: -5% hard stop
-  - custom_stoploss, custom_exit (disabled)
-  - IDENTIFIER: leah_v3_vol (forces fresh model)
+  - ATR trailing stop (custom_stoploss) — ACTIVE
+  - Graduated loss-time exits (custom_exit) — ACTIVE
+  - IDENTIFIER: leah_v4_4_stoploss_fix
 
 Why volatility as target (vs directional):
   - Directional target: max feature correlation < 3% — pure noise
@@ -123,7 +124,7 @@ class LeahAI(IStrategy):
 
     stoploss = -0.05
     trailing_stop = False
-    use_custom_stoploss = False
+    use_custom_stoploss = True
 
     use_exit_signal = True   # True — required for custom_exit (time exit) to fire (v4.3 fix)
     exit_profit_only = False
@@ -815,15 +816,21 @@ class LeahAI(IStrategy):
         return max(stop_pct, -abs(self.stoploss))
 
     def custom_exit(self, pair, trade, current_time, current_rate, current_profit, **kwargs):
-        # Time-based exit: if underwater after 6 hours, exit rather than hold indefinitely
-        # Both current_time and trade.open_date are tz-aware in Freqtrade 2026.4.
-        # Strip tzinfo from both to allow arithmetic without timezone offset errors.
-        current_time_naive = current_time.replace(tzinfo=None)
-        open_date_naive = trade.open_date.replace(tzinfo=None)
-        hold_minutes = (current_time_naive - open_date_naive).total_seconds() / 60
-        if current_profit < 0:
-            if hold_minutes > 360:  # 6 hours
-                return "time_exit_6h_negative"
+        """
+        Graduated loss-time exits — cuts slow bleeders before they accumulate.
+        Replaces the blunt 6h time exit that let BTC bleed -17% over 22h.
+        Fires BEFORE custom_stoploss (Freqtrade exit priority: custom_exit → stoploss).
+        """
+        current_naive = current_time.replace(tzinfo=None) if hasattr(current_time, 'tzinfo') else current_time
+        open_naive = trade.open_date.replace(tzinfo=None) if hasattr(trade.open_date, 'tzinfo') else trade.open_date
+        hold_minutes = (current_naive - open_naive).total_seconds() / 60
+
+        if hold_minutes > 60 and current_profit < -0.005:   # -0.5% after 1h → cut early
+            return "time_loss_1h"
+        if hold_minutes > 180 and current_profit < -0.002:  # -0.2% after 3h → cut if still soft
+            return "time_loss_3h"
+        if hold_minutes > 360 and current_profit < 0:       # 6h still underwater → exit
+            return "time_exit_6h_negative"
         return None
 
     def on_trade_close(self, pair: str, trade: Trade, order_type: str, **kwargs) -> None:
@@ -867,7 +874,7 @@ class LeahAI(IStrategy):
             # Update exit counters
             if exit_reason and exit_reason.startswith("roi"):
                 self._pf_roi_exits += 1
-            elif exit_reason == "time_exit_6h_negative":
+            elif exit_reason in ("time_exit_6h_negative", "time_loss_1h", "time_loss_3h"):
                 self._pf_time_exits += 1
             elif exit_reason == "stoploss":
                 self._pf_sl_exits += 1
