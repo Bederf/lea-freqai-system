@@ -311,6 +311,12 @@ class LeahAI(IStrategy):
         if self._v44_enabled:
             logger.warning("force_v44_model=true — v4.4 classifier override ENABLED")
 
+        # Per-candle probability cache: populated in populate_entry_trend (from
+        # iloc[-2] = last completed candle), read in confirm_trade_entry to
+        # bypass get_analyzed_dataframe() which may return a fresh copy without
+        # the v4.4-modified &-target column.
+        self._v44_prob_cache: dict[str, float] = {}
+
         # ── Paper Trading Monitor ─────────────────────────────────────
         # Tracks opportunity funnel and calibration buckets without slowing the bot
         self._pf_start_time = datetime.now()
@@ -588,6 +594,17 @@ class LeahAI(IStrategy):
             else:
                 logger.warning(f"[{pair}] v4.4 model unavailable — using FreqAI &-target")
 
+        # ── v4.4 probability cache ─────────────────────────────────────────
+        # _apply_v44_prediction modifies dataframe["&-target"] with the XGBClassifier
+        # probability (elevated ~0.43-0.48). Cache it here so confirm_trade_entry
+        # reads v4.4 instead of the suppressed FreqAI regression value.
+        # Also init the dict on first call so it's always available.
+        if not hasattr(self, "_v44_prob_cache"):
+            self._v44_prob_cache = {}
+        if "&-target" in dataframe.columns and len(dataframe) >= 2:
+            # iloc[-2] = last COMPLETED candle; iloc[-1] = live candle (do_predict=0)
+            self._v44_prob_cache[pair] = float(dataframe["&-target"].iloc[-2])
+
         # ── Debug log ────────────────────────────────────────────────────
         _cols = list(dataframe.columns)
         _has_1 = "1" in dataframe.columns
@@ -697,9 +714,33 @@ class LeahAI(IStrategy):
             (dataframe["atr14_pct_rank"] >= 80.0 if "atr14_pct_rank" in dataframe.columns else pd.Series(True, index=dataframe.index)),
         ]
 
+        # DEBUG: log each condition result for iloc[-2] candle
+        pair = metadata.get("pair", "?")
+        idx = -2 if len(dataframe) >= 2 else -1
+        r = dataframe.iloc[idx]
+        dc = {
+            "c1_prob": r["&-target"] if "&-target" in dataframe.columns else float("nan"),
+            "c2_btc": r["%btc_trend"] if "%btc_trend" in dataframe.columns else float("nan"),
+            "c3_ema": (r["close"] > r["ema_50"]) if "ema_50" in dataframe.columns else "N/A",
+            "c4_dp": int(r["do_predict"]) if "do_predict" in dataframe.columns else -1,
+            "c5_vol": r["volume"] if "volume" in dataframe.columns else 0,
+            "c6_atr": r["atr14_pct_rank"] if "atr14_pct_rank" in dataframe.columns else float("nan"),
+        }
+        passes = {
+            "c1": dc["c1_prob"] > self.ml_entry_probability if dc["c1_prob"] == dc["c1_prob"] else False,
+            "c2": dc["c2_btc"] >= 0.002 if dc["c2_btc"] == dc["c2_btc"] else False,
+            "c3": dc["c3_ema"],
+            "c4": dc["c4_dp"] == 1,
+            "c5": dc["c5_vol"] > 0,
+            "c6": dc["c6_atr"] >= 80.0 if dc["c6_atr"] == dc["c6_atr"] else False,
+        }
+        logger.warning(f"[{pair}] conditions iloc[{idx}]: prob={dc['c1_prob']:.4f}(c1={passes['c1']}) btc={dc['c2_btc']:+.4f}(c2={passes['c2']}) dp={dc['c4_dp']}(c4={passes['c4']}) atr={dc['c6_atr']:.1f}(c6={passes['c6']}) raw_atr={dataframe['atr14_pct_rank'].iloc[idx] if 'atr14_pct_rank' in dataframe.columns else 'N/A'}")
+
         entry_signal = reduce(lambda x, y: x & y, conditions)
         dataframe["enter_long"] = 0
         dataframe.loc[entry_signal, "enter_long"] = 1
+        if dataframe["enter_long"].iloc[-1] == 1:
+            logger.warning(f"[{pair}] >>> LONG SIGNAL FIRED <<<")
 
         # Persist prediction value to enter_tag
         if "&-target" in dataframe.columns:
@@ -1055,19 +1096,16 @@ class LeahAI(IStrategy):
         side: str,
         **kwargs,
     ) -> bool:
+        cached_prob = self._v44_prob_cache.get(pair)
         dataframe, _ = self.dp.get_analyzed_dataframe(pair, self.timeframe)
-        if dataframe is None or dataframe.empty:
-            return False
-
-        signal_candle = _get_latest_signal_candle(dataframe)
-
-        # Guard: require &-target column (regression value from XGBRegressor)
-        if "&-target" not in signal_candle:
-            logger.warning(f"[{pair}] No &-target column — no entries")
-            return False
-
-        # Gate 1: model output threshold
-        prob = float(signal_candle["&-target"])
+        signal_candle = _get_latest_signal_candle(dataframe) if dataframe is not None and not dataframe.empty else None
+        if cached_prob is not None:
+            prob = cached_prob
+            logger.warning(f"[{pair}] confirm reading v44_cache prob={prob:.4f}")
+        else:
+            if signal_candle is None:
+                return False
+            prob = float(signal_candle["&-target"]) if signal_candle is not None and "&-target" in signal_candle else 0.0
         if prob <= self.ml_entry_probability:
             logger.warning(
                 f"[{pair}] confirm DENIED: prob={prob:.4f} <= {self.ml_entry_probability}"
@@ -1100,8 +1138,11 @@ class LeahAI(IStrategy):
             return False
 
         # Gate 6: ATR percentile rank — top 20% volatility (vol expansion thesis)
+        # Bypass during warmup (NaN atr means insufficient history to compute percentile rank)
         atr_rank = float(signal_candle.get("atr14_pct_rank", 0) or 0)
-        if atr_rank < 80.0:
+        if np.isnan(atr_rank) or atr_rank == 0:
+            logger.warning(f"[{pair}] ATR warmup bypass: atr14_pct_rank={atr_rank} (insufficient history)")
+        elif atr_rank < 80.0:
             logger.warning(f"[{pair}] confirm DENIED: atr14_pct_rank={atr_rank:.2f} < 80")
             return False
 
