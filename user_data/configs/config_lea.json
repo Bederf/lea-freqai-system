@@ -77,7 +77,7 @@
     "purge_old_models": 2,
     "train_period_days": 15,
     "backtest_period_days": 7,
-    "live_retrain_hours": 0,
+    "live_retrain_hours": 168,
     "identifier": "lea_v6",
     "feature_parameters": {
       "include_timeframes": [
@@ -105,6 +105,7 @@
       "test_size": 0.33,
       "random_state": 1
     },
-    "freqaimodel": "XGBoostRegressor"
+    "freqaimodel": "XGBoostRegressor",
+    "expiration_hours": 336
   }
 }

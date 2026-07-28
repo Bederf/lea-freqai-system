@@ -596,14 +596,15 @@ class LeahAI(IStrategy):
 
         # ── v4.4 probability cache ─────────────────────────────────────────
         # _apply_v44_prediction modifies dataframe["&-target"] with the XGBClassifier
-        # probability (elevated ~0.43-0.48). Cache it here so confirm_trade_entry
-        # reads v4.4 instead of the suppressed FreqAI regression value.
-        # Also init the dict on first call so it's always available.
+        # probability (elevated ~0.43-0.48). Cache the iloc[-2] value here — this is
+        # the last completed candle that populate_entry_trend will evaluate.
+        # Use a separate column (v44_prob_il2) so populate_entry_trend reads it
+        # directly rather than relying on dataframe reference continuity.
         if not hasattr(self, "_v44_prob_cache"):
-            self._v44_prob_cache = {}
+            self._v44_prob_cache: dict[str, float] = {}
         if "&-target" in dataframe.columns and len(dataframe) >= 2:
-            # iloc[-2] = last COMPLETED candle; iloc[-1] = live candle (do_predict=0)
             self._v44_prob_cache[pair] = float(dataframe["&-target"].iloc[-2])
+            dataframe["v44_prob_il2"] = self._v44_prob_cache[pair]
 
         # ── Debug log ────────────────────────────────────────────────────
         _cols = list(dataframe.columns)
@@ -699,48 +700,45 @@ class LeahAI(IStrategy):
             dataframe["enter_long"] = 0
             return dataframe
 
+        # =====================================================================
+        # v4.4 probability gate (c1)
+        # Read the v4.4 probability for iloc[-2] (last completed candle) from the
+        # cache populated in populate_indicators. This is the XGBClassifier probability
+        # (elevated ~0.43-0.48), NOT the suppressed FreqAI regression value.
+        pair = metadata.get("pair", "?")
+        v44_prob_il2 = self._v44_prob_cache.get(pair, float("nan"))
+
         conditions = [
-            # 1. Model regression value > threshold
-            (dataframe["&-target"] > self.ml_entry_probability if "&-target" in dataframe.columns else pd.Series(False, index=dataframe.index)),
-            # 2. BTC bull regime
-            dataframe["%btc_trend"] >= 0.002,
-            # 3. Pair in local uptrend
+            # 1. v4.4 probability > threshold (vectorized over all rows)
+            (
+                (dataframe["&-target"] > self.ml_entry_probability)
+                if "&-target" in dataframe.columns
+                else pd.Series(False, index=dataframe.index)
+            ),
+            # 2. Pair in local uptrend
             dataframe["close"] > dataframe["ema_50"],
             # 4. FreqAI quality gate
             (dataframe["do_predict"] == 1 if "do_predict" in dataframe.columns else pd.Series(True, index=dataframe.index)),
             # 5. Valid candle
             dataframe["volume"] > 0,
-            # 6. ATR percentile gate -- top 20% volatility
-            (dataframe["atr14_pct_rank"] >= 80.0 if "atr14_pct_rank" in dataframe.columns else pd.Series(True, index=dataframe.index)),
+            # 6. ATR percentile gate -- NaN/0 = bypass for warmup
+            (
+                (dataframe["atr14_pct_rank"] >= 80.0) | dataframe["atr14_pct_rank"].isna() | (dataframe["atr14_pct_rank"] == 0)
+                if "atr14_pct_rank" in dataframe.columns
+                else pd.Series(True, index=dataframe.index)
+            ),
         ]
 
-        # DEBUG: log each condition result for iloc[-2] candle
-        pair = metadata.get("pair", "?")
-        idx = -2 if len(dataframe) >= 2 else -1
-        r = dataframe.iloc[idx]
-        dc = {
-            "c1_prob": r["&-target"] if "&-target" in dataframe.columns else float("nan"),
-            "c2_btc": r["%btc_trend"] if "%btc_trend" in dataframe.columns else float("nan"),
-            "c3_ema": (r["close"] > r["ema_50"]) if "ema_50" in dataframe.columns else "N/A",
-            "c4_dp": int(r["do_predict"]) if "do_predict" in dataframe.columns else -1,
-            "c5_vol": r["volume"] if "volume" in dataframe.columns else 0,
-            "c6_atr": r["atr14_pct_rank"] if "atr14_pct_rank" in dataframe.columns else float("nan"),
-        }
-        passes = {
-            "c1": dc["c1_prob"] > self.ml_entry_probability if dc["c1_prob"] == dc["c1_prob"] else False,
-            "c2": dc["c2_btc"] >= 0.002 if dc["c2_btc"] == dc["c2_btc"] else False,
-            "c3": dc["c3_ema"],
-            "c4": dc["c4_dp"] == 1,
-            "c5": dc["c5_vol"] > 0,
-            "c6": dc["c6_atr"] >= 80.0 if dc["c6_atr"] == dc["c6_atr"] else False,
-        }
-        logger.warning(f"[{pair}] conditions iloc[{idx}]: prob={dc['c1_prob']:.4f}(c1={passes['c1']}) btc={dc['c2_btc']:+.4f}(c2={passes['c2']}) dp={dc['c4_dp']}(c4={passes['c4']}) atr={dc['c6_atr']:.1f}(c6={passes['c6']}) raw_atr={dataframe['atr14_pct_rank'].iloc[idx] if 'atr14_pct_rank' in dataframe.columns else 'N/A'}")
-
         entry_signal = reduce(lambda x, y: x & y, conditions)
+        n_pass = int(entry_signal.sum())
+        last_pass_idx = entry_signal[entry_signal].index[-1] if n_pass > 0 else None
+        logger.warning(
+            f"[{pair}] v44_prob_il2={v44_prob_il2:.4f} | passes={n_pass}/{len(dataframe)} "
+            f"(last_pass_idx={last_pass_idx})"
+        )
+
         dataframe["enter_long"] = 0
         dataframe.loc[entry_signal, "enter_long"] = 1
-        if dataframe["enter_long"].iloc[-1] == 1:
-            logger.warning(f"[{pair}] >>> LONG SIGNAL FIRED <<<")
 
         # Persist prediction value to enter_tag
         if "&-target" in dataframe.columns:
@@ -1189,6 +1187,8 @@ class LeahAI(IStrategy):
             **gates,
         })
 
+        # Log ENTRY for paper trading tracking
+        logger.warning(f"[{pair}] ENTRY btc_trend={btc_trend:+.4f} prob={prob:.4f} atr_rank={atr_rank:.1f}")
         return True
 
     # =========================================================================
