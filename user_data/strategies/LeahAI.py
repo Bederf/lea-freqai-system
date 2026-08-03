@@ -603,7 +603,7 @@ class LeahAI(IStrategy):
         if not hasattr(self, "_v44_prob_cache"):
             self._v44_prob_cache: dict[str, float] = {}
         if "&-target" in dataframe.columns and len(dataframe) >= 2:
-            self._v44_prob_cache[pair] = float(dataframe["&-target"].iloc[-2])
+            self._v44_prob_cache[pair] = float(dataframe["&-target"].iloc[-1])
             dataframe["v44_prob_il2"] = self._v44_prob_cache[pair]
 
         # ── Debug log ────────────────────────────────────────────────────
@@ -833,6 +833,16 @@ class LeahAI(IStrategy):
 
         last = dataframe.iloc[-1]
         atr = last.get("atr")
+        atr_rank = float(last.get("atr14_pct_rank", 0) or 0)
+
+        # ATR warmup floor: atr14_pct_rank < 10 means ATR is in the bottom 10%
+        # of its 500-candle lookback range (insufficient history). Fall back to
+        # hard stoploss to avoid triggering on regime noise. Same logic as the
+        # ATR bypass in the entry confirm gate. Covers the first ~7 days
+        # post-restart until ATR values stabilise in the upper range.
+        if atr_rank < 10:
+            return self.stoploss
+
         if atr is None or pd.isna(atr):
             return self.stoploss
 
@@ -863,6 +873,13 @@ class LeahAI(IStrategy):
         current_naive = current_time.replace(tzinfo=None) if hasattr(current_time, 'tzinfo') else current_time
         open_naive = trade.open_date.replace(tzinfo=None) if hasattr(trade.open_date, 'tzinfo') else trade.open_date
         hold_minutes = (current_naive - open_naive).total_seconds() / 60
+
+        # 1H snapshot — captured once for checkpoint 10 analysis
+        if 59 <= hold_minutes <= 61:
+            logger.warning(
+                f"[1H_SNAPSHOT] pair={pair} id={trade.id} "
+                f"profit={current_profit:.4f} hold_min={hold_minutes:.1f}"
+            )
 
         if hold_minutes > 60 and current_profit < -0.005:   # -0.5% after 1h → cut early
             return "time_loss_1h"
@@ -1101,6 +1118,7 @@ class LeahAI(IStrategy):
             prob = cached_prob
             logger.warning(f"[{pair}] confirm reading v44_cache prob={prob:.4f}")
         else:
+            logger.warning(f"[{pair}] confirm NO CACHE — reading &-target from signal_candle")
             if signal_candle is None:
                 return False
             prob = float(signal_candle["&-target"]) if signal_candle is not None and "&-target" in signal_candle else 0.0
@@ -1110,11 +1128,8 @@ class LeahAI(IStrategy):
             )
             return False
 
-        # Gate 2: BTC trend — require meaningful positive regime, not noise
+        # Gate 2: BTC trend — post-hoc analysis only (was causing 4668/3 denials ratio)
         btc_trend = float(signal_candle.get("%btc_trend", 0))
-        if btc_trend < 0.002:
-            logger.warning(f"[{pair}] confirm DENIED: BTC trend={btc_trend:+.4f} < 0.002")
-            return False
 
         # Gate 3: pair above EMA50
         ema_50 = float(signal_candle.get("ema_50", 0))
