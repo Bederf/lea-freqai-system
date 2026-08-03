@@ -1,89 +1,85 @@
 {
     "$schema": "https://schema.freqtrade.io/schema.json",
     "max_open_trades": 3,
-    "stake_currency": "BTC",
-    "stake_amount": 0.01,
+    "stake_currency": "USDT",
+    "stake_amount": 30,
     "tradable_balance_ratio": 0.99,
     "fiat_display_currency": "USD",
-    "dry_run": true,
-    "dry_run_wallet": 1,
-    "cancel_open_orders_on_exit": false,
-    "trading_mode": "spot",
-    "margin_mode": "",
     "timeframe": "5m",
+    "dry_run": true,
+    "cancel_open_orders_on_exit": false,
     "unfilledtimeout": {
         "entry": 10,
         "exit": 10,
         "exit_timeout_count": 0,
         "unit": "minutes"
     },
-    "freqai": {
-        "enabled": true,
-        "train_period_days": 30,
-        "backtest_period_days": 7,
-        "identifier": "lea_relaxed_di",
-        "live_retrain_hours": 0,
-        "purge_old_models": 5,
-        "save_backtest_models": true,
-        "feature_parameters": {
-            "include_timeframes": ["5m", "15m", "1h"],
-            "include_corr_pairlist": [],
-            "label_period_candles": 12,
-            "include_shifted_candles": 2,
-            "indicator_periods_candles": [14, 20, 50, 200],
-            "DI_threshold": 10,
-            "weight_factor": 0.9,
-            "principal_component_analysis": false,
-            "use_SVM_to_remove_outliers": false
-        },
-        "data_split_parameters": {
-            "test_size": 0.25,
-            "shuffle": false
-        },
-        "model_training_parameters": {
-            "n_estimators": 100,
-            "learning_rate": 0.1,
-            "max_depth": 6
-        }
-    },
     "entry_pricing": {
-        "price_side": "same",
+        "price_side": "other",
         "use_order_book": true,
         "order_book_top": 1,
-        "price_last_balance": 0.0
+        "price_last_balance": 0.0,
+        "check_depth_of_market": {
+            "enabled": false,
+            "bids_to_ask_delta": 1
+        }
     },
     "exit_pricing": {
-        "price_side": "same",
+        "price_side": "other",
         "use_order_book": true,
         "order_book_top": 1
     },
     "exchange": {
         "name": "binance",
-        "key": "",
-        "secret": "",
+        "key": "REDACTED",
+        "secret": "REDACTED",
         "ccxt_config": {},
         "ccxt_async_config": {},
         "pair_whitelist": [
-            "UNI/BTC",
-            "LTC/BTC",
-            "ADA/BTC"
+            "ALGO/USDT",
+            "ATOM/USDT",
+            "BAT/USDT",
+            "BCH/USDT",
+            "ETH/USDT",
+            "LINK/USDT",
+            "LTC/USDT",
+            "XRP/USDT"
         ],
-        "pair_blacklist": []
+        "pair_blacklist": [
+            "BNB/.*"
+        ]
     },
     "pairlists": [
         {
             "method": "StaticPairList"
         }
     ],
-    "api_server": {
-        "enabled": false,
-        "listen_ip_address": "127.0.0.1",
-        "listen_port": 9090,
-        "username": "user",
-        "password": "pass"
+    "telegram": {
+        "enabled": true,
+        "token": "REDACTED",
+        "chat_id": "8359288792"
     },
-    "bot_name": "hybrid_dryrun",
+    "api_server": {
+        "enabled": true,
+        "listen_ip_address": "127.0.0.1",
+        "listen_port": 8081,
+        "verbosity": "error",
+        "jwt_secret_key": "REDACTED",
+        "CORS_origins": [],
+        "username": "admin",
+        "password": "REDACTED"
+    },
+    "bot_name": "LeaFreqAI",
     "initial_state": "running",
-    "strategy": "HybridAIStrategy",
-    "freqaimodel": "XGBoostRegressor"
+    "force_entry_enable": false,
+    "internals": {
+        "process_throttle_secs": 5
+    },
+    "force_v44_model": true,
+    "stoploss": -0.05,
+    "default_stoploss": -0.05,
+    "freqai": {
+        "live_retrain_hours": 168,
+        "expiration_hours": 336
+    }
 }

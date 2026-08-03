@@ -20,6 +20,11 @@ freqtrade-profit-plot.html
 freqtrade/rpc/api_server/ui/*
 build_helpers/ta-lib/*
 
+# v4.4 live artifacts — committed for reproducibility
+!user_data/models/leah_v4_4_*.pkl
+!user_data/models/leah_v4_4_*.json
+!user_data/tradesv3_lea_v6.sqlite
+
 # Macos related
 .DS_Store
 

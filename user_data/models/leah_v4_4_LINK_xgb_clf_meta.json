@@ -1,0 +1,56 @@
+{
+  "version": "v4.4",
+  "pair": "LINK",
+  "date": "20260711_232813",
+  "n_samples": 46034,
+  "positive_rate": 0.3056653777642612,
+  "features": [
+    "vol_ratio_20",
+    "vol_ratio_10",
+    "vol_ratio_5",
+    "vol_ratio_3",
+    "vol_ma20",
+    "vol_ma10",
+    "%ret_1",
+    "%ret_3",
+    "candle_body",
+    "hl_range",
+    "lower_shadow",
+    "upper_shadow",
+    "mom_6",
+    "atr14",
+    "%atr14_rel"
+  ],
+  "n_features": 15,
+  "hyperparameters": {
+    "objective": "binary:logistic",
+    "n_estimators": 200,
+    "max_depth": 4,
+    "learning_rate": 0.05,
+    "random_state": 1,
+    "eval_metric": "logloss"
+  },
+  "training": {
+    "date_from": "2026-02-02 01:10:00+00:00",
+    "date_to": "2026-07-11 21:15:00+00:00"
+  },
+  "prediction_distribution": {
+    "mean": 0.30566874146461487,
+    "std": 0.10852247476577759,
+    "min": 0.007214400917291641,
+    "max": 0.8747383952140808,
+    "pct_above_55": 0.018073597775557195,
+    "pct_above_50": 0.03927531824303775
+  },
+  "source": "experiment_e_walkforward_15f_stable",
+  "experiments_validated": [
+    "A",
+    "D",
+    "E"
+  ],
+  "notes": [
+    "15-feature XGBClassifier; validated vs 28-feature in Experiment E",
+    "Walk-forward AUC 0.6247 vs 0.6045 baseline; 13/18 folds won",
+    "Deploy after shadow mode + paper trading validation"
+  ]
+}
